@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PassageInputPage from './pages/PassageInputPage';
 import ClassFollowModePage from './pages/ClassFollowModePage';
+import ChunkReadingPage from './pages/ChunkReadingPage';
 import './index.css'; // Make sure styles are imported
 
 function App() {
@@ -50,7 +51,10 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, justifyContent: 'center' }}>
           <button onClick={() => setCurrentPage('input')}>새 지문 입력하기</button>
           {passages.length > 0 && (
-            <button onClick={() => setCurrentPage('follow')}>이전 지문 이어서 읽기</button>
+            <div style={{ display: 'flex', gap: '24px' }}>
+              <button style={{ flex: 1 }} onClick={() => setCurrentPage('follow')}>집중 읽기 모드</button>
+              <button style={{ flex: 1, backgroundColor: 'var(--color-secondary)', color: 'var(--color-text)' }} onClick={() => setCurrentPage('chunk')}>직독직해 모드</button>
+            </div>
           )}
         </div>
       )}
@@ -64,6 +68,13 @@ function App() {
 
       {currentPage === 'follow' && (
         <ClassFollowModePage 
+          passages={passages} 
+          onBack={() => setCurrentPage('home')} 
+        />
+      )}
+
+      {currentPage === 'chunk' && (
+        <ChunkReadingPage 
           passages={passages} 
           onBack={() => setCurrentPage('home')} 
         />
