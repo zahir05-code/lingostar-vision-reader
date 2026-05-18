@@ -1,122 +1,75 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import PassageInputPage from './pages/PassageInputPage';
+import ClassFollowModePage from './pages/ClassFollowModePage';
+import './index.css'; // Make sure styles are imported
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState('home');
+  const [theme, setTheme] = useState('light');
+  const [passages, setPassages] = useState([]);
+
+  // Load theme and passages from local storage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('lingo-theme') || 'light';
+    const savedPassages = JSON.parse(localStorage.getItem('lingo-passages') || '[]');
+    setTheme(savedTheme);
+    setPassages(savedPassages);
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    localStorage.setItem('lingo-theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
+
+  const handleSavePassages = (newPassages) => {
+    setPassages(newPassages);
+    localStorage.setItem('lingo-passages', JSON.stringify(newPassages));
+    setCurrentPage('follow');
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div className="app-container">
+      <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '32px' }}>LingoStar Vision Reader</h1>
+        <select 
+          value={theme} 
+          onChange={(e) => handleThemeChange(e.target.value)}
+          style={{ fontSize: '24px', padding: '8px 16px', borderRadius: '8px' }}
         >
-          Count is {count}
-        </button>
-      </section>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="yellow">Yellow</option>
+          <option value="blue-soft">Blue Soft</option>
+          <option value="high-contrast">High Contrast</option>
+        </select>
+      </header>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {currentPage === 'home' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, justifyContent: 'center' }}>
+          <button onClick={() => setCurrentPage('input')}>새 지문 입력하기</button>
+          {passages.length > 0 && (
+            <button onClick={() => setCurrentPage('follow')}>이전 지문 이어서 읽기</button>
+          )}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {currentPage === 'input' && (
+        <PassageInputPage 
+          onSave={handleSavePassages} 
+          onCancel={() => setCurrentPage('home')} 
+        />
+      )}
+
+      {currentPage === 'follow' && (
+        <ClassFollowModePage 
+          passages={passages} 
+          onBack={() => setCurrentPage('home')} 
+        />
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
