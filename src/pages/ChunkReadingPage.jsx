@@ -387,8 +387,11 @@ export default function ChunkReadingPage() {
     fontSize, 
     speakText, 
     addToVocab, 
+    removeFromVocab,
+    myVocab = [],
     dictMock, 
     parseDynamicWordMeaning, 
+    fetchLiveWordDefinition,
     theme,
     nextSentence,
     prevSentence
@@ -529,19 +532,22 @@ export default function ChunkReadingPage() {
   const themeStyles = getThemeAdjustedStyles(theme);
 
   // 단어 클릭 핸들러
-  const handleWordClick = (rawWord) => {
+  const handleWordClick = async (rawWord) => {
     const cleanWord = rawWord.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim();
     if (!cleanWord) return;
-    const lower = cleanWord.toLowerCase();
-    const foundEntry = dictMock[lower];
     
     setSelectedWord(cleanWord);
+    setMeaning('뜻을 불러오는 중...');
+    setSynonyms('로딩 중...');
+    setAntonyms('로딩 중...');
+    setSimilarIdioms('');
     
-    if (foundEntry && typeof foundEntry === 'object') {
-      setMeaning(foundEntry.meaning);
-      setSynonyms(foundEntry.synonyms || '동의어 데이터 없음');
-      setAntonyms(foundEntry.antonyms || '반의어 데이터 없음');
-      setSimilarIdioms(foundEntry.similarIdioms || '');
+    const entry = await fetchLiveWordDefinition(cleanWord);
+    if (entry) {
+      setMeaning(entry.meaning);
+      setSynonyms(entry.synonyms || '동의어 데이터 없음');
+      setAntonyms(entry.antonyms || '반의어 데이터 없음');
+      setSimilarIdioms(entry.similarIdioms || '');
     } else {
       const parsedMeaning = parseDynamicWordMeaning(cleanWord);
       setMeaning(parsedMeaning);
@@ -604,20 +610,42 @@ export default function ChunkReadingPage() {
         }}>
           {processedChunks.map((chunk, cIdx) => {
             return (
-              <span key={cIdx} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <span key={cIdx} style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{
                   backgroundColor: chunk.capsuleBg,
                   color: chunk.accentColor,
                   border: '3px solid #000000',
                   borderRadius: '30px',
                   padding: '10px 26px',
-                  display: 'inline-block',
+                  display: 'inline-flex',
+                  flexWrap: 'wrap',
+                  gap: '4px',
                   boxShadow: '3px 3px 0px 0px #000000',
                   transition: 'transform 0.15s',
                   userSelect: 'text',
                   fontFamily: "'Outfit', 'Inter', sans-serif"
                 }}>
-                  {chunk.text}
+                  {chunk.text.split(/\s+/).map((w, wIdx) => {
+                    const cleanWord = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim();
+                    if (!cleanWord) return null;
+                    return (
+                      <span
+                        key={wIdx}
+                        onClick={() => handleWordClick(w)}
+                        style={{
+                          cursor: 'pointer',
+                          borderRadius: '8px',
+                          padding: '2px 6px',
+                          transition: 'background-color 0.15s',
+                          display: 'inline-block'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.08)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        {w}
+                      </span>
+                    );
+                  })}
                 </span>
                 
                 {/* 캡슐들 바로 옆에 굵은 검은색 구분 슬래시 기호 배치 */}
@@ -627,6 +655,7 @@ export default function ChunkReadingPage() {
                     fontSize: `${Math.max(fontSize * 0.9, 28)}px`, 
                     fontWeight: '900', 
                     marginLeft: '16px',
+                    marginRight: '16px',
                     userSelect: 'none'
                   }}>
                     /
@@ -943,105 +972,155 @@ export default function ChunkReadingPage() {
       </div>
 
       {/* 📒 단어/숙어 세부 사전 팝업 모달 (Stitch 명도 및 동의어/반의어 탑재) */}
-      {selectedWord && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          zIndex: 99999,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backdropFilter: 'blur(4px)',
-          padding: '24px'
-        }}>
+      {selectedWord && (() => {
+        const isSaved = myVocab.some(item => item.word.toLowerCase() === selectedWord.toLowerCase());
+        return (
           <div style={{
-            backgroundColor: 'var(--color-bg)',
-            border: '5px solid var(--color-primary)',
-            borderRadius: '24px',
-            padding: '32px',
-            boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
-            width: '100%',
-            maxWidth: '550px',
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            zIndex: 99999,
             display: 'flex',
-            flexDirection: 'column',
-            gap: '24px',
-            textAlign: 'center',
-            animation: 'fadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+            justifyContent: 'center',
+            alignItems: 'center',
+            backdropFilter: 'blur(4px)',
+            padding: '24px'
           }}>
-            <div>
-              <span style={{ 
-                fontSize: '18px', 
-                fontWeight: 'bold', 
-                color: 'var(--color-text)', 
-                opacity: 0.6,
-                border: '2px solid var(--color-border)',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                backgroundColor: 'var(--color-secondary)',
-                display: 'inline-block'
-              }}>
-                📒 단어 스피드 학습 사전
-              </span>
-              <h3 style={{ fontSize: '40px', fontWeight: '900', color: 'var(--color-primary)', marginTop: '20px', wordBreak: 'break-all', marginBottom: '8px' }}>
-                {selectedWord}
-              </h3>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
-                {/* 1. 의미 */}
-                <div style={{ 
-                  fontSize: '26px', 
+            <div style={{
+              backgroundColor: 'var(--color-bg)',
+              border: '5px solid var(--color-primary)',
+              borderRadius: '24px',
+              padding: '32px',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+              width: '100%',
+              maxWidth: '550px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
+              textAlign: 'center',
+              animation: 'fadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+            }}>
+              <div>
+                <span style={{ 
+                  fontSize: '18px', 
                   fontWeight: 'bold', 
-                  padding: '16px',
-                  backgroundColor: 'var(--color-secondary)',
-                  borderRadius: '12px',
+                  color: 'var(--color-text)', 
+                  opacity: 0.6,
                   border: '2px solid var(--color-border)',
-                  lineHeight: '1.4'
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  backgroundColor: 'var(--color-secondary)',
+                  display: 'inline-block'
                 }}>
-                  뜻: {meaning}
-                </div>
+                  📒 단어 스피드 학습 사전
+                </span>
+                <h3 style={{ fontSize: '40px', fontWeight: '900', color: 'var(--color-primary)', marginTop: '20px', wordBreak: 'break-all', marginBottom: '8px' }}>
+                  {selectedWord}
+                </h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+                  {/* 1. 의미 */}
+                  <div style={{ 
+                    fontSize: '26px', 
+                    fontWeight: 'bold', 
+                    padding: '16px',
+                    backgroundColor: 'var(--color-secondary)',
+                    borderRadius: '12px',
+                    border: '2px solid var(--color-border)',
+                    lineHeight: '1.4'
+                  }}>
+                    뜻: {meaning}
+                  </div>
 
-                {/* 2. 동의어 & 반의어 (Stitch 연동형) */}
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{ flex: 1, backgroundColor: 'rgba(46, 125, 50, 0.06)', border: '2px solid #2e7d32', borderRadius: '12px', padding: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: '900' }}>동의어 (Synonym)</span>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>{synonyms}</p>
-                  </div>
-                  <div style={{ flex: 1, backgroundColor: 'rgba(230, 81, 0, 0.06)', border: '2px solid #e65100', borderRadius: '12px', padding: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#e65100', fontWeight: '900' }}>반의어 (Antonym)</span>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>{antonyms}</p>
-                  </div>
-                </div>
+                  {/* 저장 상태 고대비 배지 */}
+                  {isSaved ? (
+                    <div style={{
+                      backgroundColor: '#ebfbee',
+                      color: '#2b8a3e',
+                      border: '3px solid #000000',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontSize: '20px',
+                      fontWeight: '900',
+                      boxShadow: '3px 3px 0px 0px #000000',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontFamily: "'Outfit', 'Inter', sans-serif"
+                    }}>
+                      <span>✓</span>
+                      <span>나의 단어장에 저장되어 있습니다.</span>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#f1f3f5',
+                      color: '#495057',
+                      border: '3px solid #000000',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontSize: '20px',
+                      fontWeight: '900',
+                      boxShadow: '3px 3px 0px 0px #000000',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontFamily: "'Outfit', 'Inter', sans-serif"
+                    }}>
+                      <span>⚪</span>
+                      <span>아직 단어장에 저장되지 않았습니다.</span>
+                    </div>
+                  )}
 
-                {/* 3. 유사 숙어 */}
-                {similarIdioms && (
-                  <div style={{ backgroundColor: 'rgba(25, 118, 210, 0.06)', border: '2px solid #1976d2', borderRadius: '12px', padding: '12px', textAlign: 'left' }}>
-                    <span style={{ fontSize: '13px', color: '#1976d2', fontWeight: '900' }}>유사 숙어 / 예구</span>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '18px', fontWeight: 'bold' }}>{similarIdioms}</p>
+                  {/* 2. 동의어 & 반의어 (Stitch 연동형) */}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1, backgroundColor: 'rgba(46, 125, 50, 0.06)', border: '2px solid #2e7d32', borderRadius: '12px', padding: '10px' }}>
+                      <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: '900' }}>동의어 (Synonym)</span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>{synonyms}</p>
+                    </div>
+                    <div style={{ flex: 1, backgroundColor: 'rgba(230, 81, 0, 0.06)', border: '2px solid #e65100', borderRadius: '12px', padding: '10px' }}>
+                      <span style={{ fontSize: '13px', color: '#e65100', fontWeight: '900' }}>반의어 (Antonym)</span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>{antonyms}</p>
+                    </div>
                   </div>
-                )}
+
+                  {/* 3. 유사 숙어 */}
+                  {similarIdioms && (
+                    <div style={{ backgroundColor: 'rgba(25, 118, 210, 0.06)', border: '2px solid #1976d2', borderRadius: '12px', padding: '12px', textAlign: 'left' }}>
+                      <span style={{ fontSize: '13px', color: '#1976d2', fontWeight: '900' }}>유사 숙어 / 예구</span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '18px', fontWeight: 'bold' }}>{similarIdioms}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <BigButton
+                  variant={isSaved ? "danger" : "success"}
+                  onClick={() => {
+                    if (isSaved) {
+                      removeFromVocab(selectedWord);
+                    } else {
+                      addToVocab(selectedWord, meaning, `[청크 학습 중 저장됨] ${currentSentence}`);
+                    }
+                  }}
+                  style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
+                >
+                  {isSaved ? "❌ 단어장 제거" : "⭐ 단어장 저장"}
+                </BigButton>
+                <BigButton
+                  variant="secondary"
+                  onClick={() => setSelectedWord(null)}
+                  style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
+                >
+                  닫기
+                </BigButton>
               </div>
             </div>
-
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <BigButton
-                variant="success"
-                onClick={handleSaveToVocab}
-                style={{ flex: 2 }}
-              >
-                ⭐ 단어장 추가
-              </BigButton>
-              <BigButton
-                variant="secondary"
-                onClick={() => setSelectedWord(null)}
-                style={{ flex: 1 }}
-              >
-                닫기
-              </BigButton>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <style>{`
         @keyframes fadeIn {

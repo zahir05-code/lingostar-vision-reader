@@ -145,22 +145,46 @@ function App() {
     e.stopPropagation(); // 카드 클릭 방지
     if (!confirm("정말로 이 지문을 삭제하시겠습니까?")) return;
     
+    // 삭제하려는 지문의 제목 추출 (동일 제목 중복 데이터 일괄 삭제로 책장 뷰 잔재 방지)
+    const targetPassage = passagesList.find(p => p.id === id);
+    if (!targetPassage) return;
+    const targetTitle = (targetPassage.title || '').trim().toLowerCase();
+    
     setIsLoading(true);
     try {
-      if (id.startsWith('local-')) {
-        throw new Error("Local item bypass");
+      // 동일한 제목을 가진 모든 지문 필터링
+      const sameTitlePassages = passagesList.filter(p => (p.title || '').trim().toLowerCase() === targetTitle);
+      
+      // Firestore에서 해당 제목의 모든 문서 일괄 삭제
+      for (const p of sameTitlePassages) {
+        if (!p.id.startsWith('local-')) {
+          try {
+            await withTimeout(deleteDoc(doc(db, 'passages', p.id)), 1500);
+          } catch (err) {
+            console.warn(`Firestore delete failed for document ${p.id}:`, err);
+          }
+        }
       }
-      await withTimeout(deleteDoc(doc(db, 'passages', id)), 1500);
+      
+      // 로컬스토리지에서도 동일 제목 지문 완전 소거
+      const localData = safeJsonParse('lingo-passages', []);
+      const updated = localData.filter(item => (item.title || '').trim().toLowerCase() !== targetTitle);
+      localStorage.setItem('lingo-passages', JSON.stringify(updated));
+      
+      // 로컬 상태 즉시 업데이트 (UI 딜레이 0ms 실현)
+      setPassagesList(prev => prev.filter(p => (p.title || '').trim().toLowerCase() !== targetTitle));
+      
+      // 백그라운드 Firestore 리스트 동기화 호출
       await fetchPassages();
     } catch (error) {
-      console.warn("Firestore delete failed or local bypass. Removing from LocalStorage:", error);
+      console.warn("Firestore delete process failed. Removing from LocalStorage:", error);
       const localData = safeJsonParse('lingo-passages', []);
-      const updated = localData.filter(item => item.id !== id);
+      const updated = localData.filter(item => (item.title || '').trim().toLowerCase() !== targetTitle);
       localStorage.setItem('lingo-passages', JSON.stringify(updated));
       
       const parsed = updated.map(item => ({
         ...item,
-        createdAt: new Date(item.createdAt)
+        createdAt: item.createdAt ? new Date(item.createdAt) : new Date()
       }));
       setPassagesList(parsed);
     } finally {

@@ -232,14 +232,16 @@ export default function ParagraphStructurePage() {
     fontSize, 
     speakText, 
     addToVocab, 
+    removeFromVocab,
     dictMock, 
     parseDynamicWordMeaning, 
+    fetchLiveWordDefinition,
     theme,
     currentReadingStep,
     setCurrentReadingStep,
     readingCounts,
     setReadingCounts,
-    myVocab
+    myVocab = []
   } = useApp();
 
   const themeStyles = getThemeAdjustedStyles(theme);
@@ -288,9 +290,9 @@ export default function ParagraphStructurePage() {
         baseVocab = extractHighLevelVocab(activePassage.fullText, dictMock);
       }
 
-      // 🌟 지문당 자동축출어휘 최소 10개 이상 무조건 보장 가드 🌟
-      // 만약 AI 추출본이나 기존 리스트가 10개 미만이면, extractHighLevelVocab에서 추가로 메꿔서 10개 이상으로 정밀 보장합니다.
-      if (baseVocab.length < 10 && activePassage.fullText) {
+      // 🌟 지문당 자동축출어휘 최소 15개 이상 무조건 보장 가드 🌟
+      // 만약 AI 추출본이나 기존 리스트가 15개 미만이면, extractHighLevelVocab에서 추가로 메꿔서 15개 이상으로 정밀 보장합니다.
+      if (baseVocab.length < 15 && activePassage.fullText) {
         const fallbackVocab = extractHighLevelVocab(activePassage.fullText, dictMock);
         const existingWords = new Set(baseVocab.map(v => v.word.toLowerCase().trim()));
         for (const item of fallbackVocab) {
@@ -298,7 +300,7 @@ export default function ParagraphStructurePage() {
           if (!existingWords.has(cleanItemWord)) {
             baseVocab.push(item);
             existingWords.add(cleanItemWord);
-            if (baseVocab.length >= 10) break;
+            if (baseVocab.length >= 15) break;
           }
         }
       }
@@ -306,6 +308,8 @@ export default function ParagraphStructurePage() {
     }
     return [];
   }, [activePassage, dictMock]);
+
+  const isWordSaved = selectedWord ? myVocab.some(item => item.word.toLowerCase() === selectedWord.toLowerCase()) : false;
 
   if (!sentences || sentences.length === 0) {
     return (
@@ -325,20 +329,22 @@ export default function ParagraphStructurePage() {
   const conclusionSentences = sentences.slice(bodyEnd);
 
   // --- 단어 터치 사전 핸들러 ---
-  const handleWordClick = (rawWord) => {
+  const handleWordClick = async (rawWord) => {
     const cleanWord = rawWord.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, '').trim();
     if (!cleanWord) return;
     
-    const lower = cleanWord.toLowerCase();
-    const foundEntry = dictMock[lower];
-    
     setSelectedWord(cleanWord);
+    setWordMeaning('뜻을 불러오는 중...');
+    setWordSynonyms('로딩 중...');
+    setWordAntonyms('로딩 중...');
+    setWordSimilarIdioms('');
     
-    if (foundEntry && typeof foundEntry === 'object') {
-      setWordMeaning(foundEntry.meaning);
-      setWordSynonyms(foundEntry.synonyms || '동의어 데이터 없음');
-      setWordAntonyms(foundEntry.antonyms || '반의어 데이터 없음');
-      setWordSimilarIdioms(foundEntry.similarIdioms || '');
+    const entry = await fetchLiveWordDefinition(cleanWord);
+    if (entry) {
+      setWordMeaning(entry.meaning);
+      setWordSynonyms(entry.synonyms || '동의어 데이터 없음');
+      setWordAntonyms(entry.antonyms || '반의어 데이터 없음');
+      setWordSimilarIdioms(entry.similarIdioms || '');
     } else {
       const parsedMeaning = parseDynamicWordMeaning(cleanWord);
       setWordMeaning(parsedMeaning);
@@ -606,7 +612,16 @@ export default function ParagraphStructurePage() {
           chunks = [{ text: txt, meaning: fallbackMeaning, tag: 'S+V' }];
         }
 
+        // 3단계 신규 직역/의역/구조분석 바인딩
+        const directTranslation = s.directTranslation || chunks.map(c => c.meaning || '').join(' / ');
+        const naturalTranslation = s.naturalTranslation || s.meaning || chunks.map(c => c.meaning || '').join(' ').replace(/\s+/g, ' ');
+        const structureAnalysis = s.structureAnalysis || '';
+
         return {
+          engText: chunks.map(c => c.text).join(' / '),
+          directTranslation,
+          naturalTranslation,
+          structureAnalysis,
           eng: chunks.map((c, cIdx) => ({
             text: (c.text || "") + (cIdx < chunks.length - 1 ? " / " : ""),
             highlight: c.tag === 'CONJ' ? 'red' : (c.tag === 'PREP' ? 'blue' : '')
@@ -715,99 +730,148 @@ export default function ParagraphStructurePage() {
         {/* 1:1 직독직해 문장 리스트 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', marginTop: '20px' }}>
           {docData.sentences.map((sent, sIdx) => {
+            const hasDetailedAnalysis = sent.structureAnalysis && sent.structureAnalysis.trim().length > 0;
+
             return (
               <div 
                 key={sIdx} 
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '16px',
-                  padding: '28px',
+                  gap: '24px',
+                  padding: '36px',
                   backgroundColor: themeStyles.cardBg,
                   border: '3.5px solid #5d4037',
-                  borderRadius: '24px',
-                  boxShadow: '4px 4px 0px 0px #5d4037'
+                  borderRadius: '28px',
+                  boxShadow: '6px 6px 0px 0px #5d4037',
+                  flexShrink: 0
                 }}
               >
-                {/* 영어 끊어읽기 문장 (텍스트 하이라이트 동기화) */}
-                <div style={{ 
-                  fontSize: `${fontSize}px`, 
-                  fontWeight: '900', 
-                  lineHeight: '1.9', 
-                  color: 'var(--color-text)',
-                  wordBreak: 'break-word'
-                }}>
-                  {sent.eng.map((part, pIdx) => {
-                    let partStyle = {};
-                    if (part.highlight === 'red') {
-                      partStyle = { color: '#d32f2f', fontWeight: '900' };
-                    } else if (part.highlight === 'underline') {
-                      partStyle = { textDecoration: 'none', fontWeight: '900' };
-                    } else if (part.highlight === 'blue-underline') {
-                      partStyle = { color: '#005dac', textDecoration: 'none', fontWeight: '900' };
-                    } else if (part.highlight === 'red-underline') {
-                      partStyle = { color: '#d32f2f', textDecoration: 'none', fontWeight: '900' };
-                    } else if (part.highlight === 'blue') {
-                      partStyle = { color: '#005dac', fontWeight: '900' };
-                    }
-                    if (part.bold) partStyle.fontWeight = '900';
-
-                    return (
-                      <span key={pIdx} style={partStyle}>
-                        {part.text}
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {/* 한글 직독직해 문장 (색상 동기화 이식) */}
-                <div style={{
-                  fontSize: `${fontSize * 0.85}px`,
-                  fontWeight: '800',
-                  lineHeight: '1.8',
-                  color: theme === 'dark' ? '#bbb' : '#495057',
-                  borderTop: '2px solid var(--color-border)', // dashed에서 solid로 변경
-                  paddingTop: '16px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '8px'
-                }}>
-                  <span style={{ fontSize: '24px' }}>👉</span>
-                  <div>
-                    {sent.kor.map((part, pIdx) => {
-                      let partStyle = {};
-                      if (part.highlight === 'red') {
-                        partStyle = { color: '#d32f2f', fontWeight: '900' };
-                      } else if (part.highlight === 'underline') {
-                        partStyle = { textDecoration: 'none', fontWeight: '900' };
-                      } else if (part.highlight === 'blue-underline') {
-                        partStyle = { color: '#005dac', textDecoration: 'none', fontWeight: '900' };
-                      } else if (part.highlight === 'red-underline') {
-                        partStyle = { color: '#d32f2f', textDecoration: 'none', fontWeight: '900' };
-                      } else if (part.highlight === 'blue') {
-                        partStyle = { color: '#005dac', fontWeight: '900' };
-                      }
-                      if (part.bold) partStyle.fontWeight = '900';
-
-                      return (
-                        <span key={pIdx} style={partStyle}>
-                          {part.text}
-                        </span>
-                      );
-                    })}
+                {/* 1. 영어 문장 (슬래시 청크 구분) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                    <div style={{ 
+                      fontSize: `${fontSize}px`, 
+                      fontWeight: '900', 
+                      lineHeight: '1.7', 
+                      color: 'var(--color-text)',
+                      wordBreak: 'break-word',
+                      flex: 1
+                    }}>
+                      {sent.engText}
+                    </div>
+                    <button
+                      onClick={() => speakText(sent.engText.replace(/\s*\/\s*/g, ' '))}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '18px',
+                        fontWeight: '900',
+                        backgroundColor: 'var(--color-secondary)',
+                        border: '3px solid #5d4037',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        boxShadow: '2px 2px 0px 0px #5d4037',
+                        alignSelf: 'flex-start'
+                      }}
+                    >
+                      🔊 듣기
+                    </button>
                   </div>
                 </div>
 
-                {/* 각주/팁 등이 있을 경우 렌더링 */}
-                {sent.footnote && (
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: '#868e96',
-                    marginTop: '8px',
-                    paddingLeft: '32px'
+                <div style={{ borderTop: '3px dashed #5d4037', margin: '4px 0' }}></div>
+
+                {/* 2. 직역: (어순 번역) */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <span className="neo-badge" style={{
+                    alignSelf: 'flex-start',
+                    fontSize: '15px',
+                    fontWeight: '900',
+                    backgroundColor: '#ffe9e3',
+                    color: '#5d4037',
+                    borderWidth: '2px',
+                    boxShadow: 'none'
                   }}>
-                    {sent.footnote}
+                    2. "직역" (어순 번역)
+                  </span>
+                  <p style={{
+                    fontSize: `${fontSize * 0.85}px`,
+                    fontWeight: '800',
+                    lineHeight: '1.7',
+                    color: theme === 'dark' ? '#bbb' : '#495057',
+                    margin: 0,
+                    wordBreak: 'break-word'
+                  }}>
+                    {sent.directTranslation}
+                  </p>
+                </div>
+
+                {/* 3. 의역: (자연스러운 한국어 번역) */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <span className="neo-badge" style={{
+                    alignSelf: 'flex-start',
+                    fontSize: '15px',
+                    fontWeight: '900',
+                    backgroundColor: '#a3f69c',
+                    color: '#005312',
+                    borderWidth: '2px',
+                    boxShadow: 'none'
+                  }}>
+                    3. "의역" (자연스러운 번역)
+                  </span>
+                  <p style={{
+                    fontSize: `${fontSize * 0.85}px`,
+                    fontWeight: '800',
+                    lineHeight: '1.7',
+                    color: theme === 'dark' ? '#bbb' : '#495057',
+                    margin: 0,
+                    wordBreak: 'break-word'
+                  }}>
+                    {sent.naturalTranslation}
+                  </p>
+                </div>
+
+                {/* 4. 영어 문장 구조식 분석 (구조와 기능) */}
+                {hasDetailedAnalysis && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    backgroundColor: theme === 'dark' ? '#2c2c2c' : '#f5f9ff',
+                    border: '3px solid #5d4037',
+                    borderRadius: '20px',
+                    padding: '24px',
+                    boxShadow: '4px 4px 0px 0px #5d4037',
+                    marginTop: '8px'
+                  }}>
+                    <span style={{
+                      fontSize: '18px',
+                      fontWeight: '900',
+                      color: '#005dac',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      📘 3. 영어 문장 구조식 분석 (구조 및 기능)
+                    </span>
+                    <p style={{
+                      fontSize: '20px',
+                      fontWeight: '800',
+                      lineHeight: '1.8',
+                      color: 'var(--color-text)',
+                      margin: 0,
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {sent.structureAnalysis}
+                    </p>
                   </div>
                 )}
               </div>
@@ -2272,6 +2336,49 @@ export default function ParagraphStructurePage() {
                 뜻: {wordMeaning}
               </div>
 
+              {/* 저장 상태 고대비 배지 */}
+              {isWordSaved ? (
+                <div style={{
+                  backgroundColor: '#ebfbee',
+                  color: '#2b8a3e',
+                  border: '3px solid #000000',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontSize: '20px',
+                  fontWeight: '900',
+                  boxShadow: '3px 3px 0px 0px #000000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  fontFamily: "'Outfit', 'Inter', sans-serif"
+                }}>
+                  <span>✓</span>
+                  <span>나의 단어장에 저장되어 있습니다.</span>
+                </div>
+              ) : (
+                <div style={{
+                  backgroundColor: '#f1f3f5',
+                  color: '#495057',
+                  border: '3px solid #000000',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontSize: '20px',
+                  fontWeight: '900',
+                  boxShadow: '3px 3px 0px 0px #000000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  fontFamily: "'Outfit', 'Inter', sans-serif"
+                }}>
+                  <span>⚪</span>
+                  <span>아직 단어장에 저장되지 않았습니다.</span>
+                </div>
+              )}
+
               {/* 🔵 동의어 & 유사숙어 패밀리 3D 캡슐화 (터치 시 원어민 음성 낭독) */}
               {wordSynonyms && wordSynonyms !== '동의어 데이터 없음' && (
                 <div style={{
@@ -2395,16 +2502,22 @@ export default function ParagraphStructurePage() {
 
             <div style={{ display: 'flex', gap: '16px' }}>
               <BigButton
-                variant="success"
-                onClick={handleSaveToVocab}
-                style={{ flex: 2 }}
+                variant={isWordSaved ? "danger" : "success"}
+                onClick={() => {
+                  if (isWordSaved) {
+                    removeFromVocab(selectedWord);
+                  } else {
+                    addToVocab(selectedWord, wordMeaning, '본문 독해 중 직접 터치하여 저장됨');
+                  }
+                }}
+                style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
               >
-                ⭐ 단어장 즉시 저장
+                {isWordSaved ? "❌ 단어장 제거" : "⭐ 단어장 저장"}
               </BigButton>
               <BigButton
                 variant="secondary"
                 onClick={() => setSelectedWord(null)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
               >
                 닫기
               </BigButton>

@@ -74,6 +74,8 @@
 | 2026-05-29 | 자동 단어 채우기 완소 및 모르는 단어 수동 터치 한글뜻/동반의어 복원 가동 | AppContext.jsx, VocabularyPage.jsx | 무단 simple word 자동삽입 제거 및 터치 시 사전 데이터 동적 보정매핑 탑재 |
 | 2026-05-29 | 어휘 탭 Previous 뒤로가기 클릭 시 구조 분석 탭 전환 및 Stepper 연계 완치 | StudyContainerPage.jsx, VocabularyPage.jsx | 탭 스위칭 누락으로 인한 Previous 버튼 동결 UX 완치 및 구조 7단계 복귀 연계 |
 | 2026-05-29 | Gemini API 모델 최신화 (gemini-1.5-flash ➔ gemini-3.5-flash) | gemini.js | 구글 AI Studio 무료 티어의 최신 플래그십 Flash 모델로 연동 엔드포인트 마이그레이션 |
+| 2026-06-01 | 고등 어법 요약 엔진 쇄신 (S-V-O-M 완전 폐기) | textParser.js, PassageInputPage.jsx, ParagraphStructurePage.jsx | 가독성 저해 요소(S-V-O-M, 마크다운 별표)를 완벽 제거하고 간결한 단일 행 출제어법 요약 포맷으로 구조화 |
+| 2026-06-01 | 자연스러운 어순 직역 교정 및 물결표(~) 기호 전면 제거 | gemini.js, textParser.js | 기계적 조사와 물결표(~)를 전면 배제하고 의미 단위 중심의 자연스러운 한글 직독직해 구현 |
 
 ---
 

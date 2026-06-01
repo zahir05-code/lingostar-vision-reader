@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import * as XLSX from 'xlsx';
 
 export default function VocabularyPage({ onGoBackToStructure }) {
   const { 
@@ -90,7 +91,7 @@ export default function VocabularyPage({ onGoBackToStructure }) {
   ], []);
 
   // --- 상태 변수 ---
-  const [selectedWord, setSelectedWord] = useState("companion");
+  const [selectedWord, setSelectedWord] = useState(null);
   const [activeMenuWord, setActiveMenuWord] = useState(null); // 'more_vert' 삭제 팝업 토글용
   const [showAchievement, setShowAchievement] = useState(false); // 🏆 일일 학습 성과 보고서 오버레이 모달 상태
 
@@ -99,8 +100,8 @@ export default function VocabularyPage({ onGoBackToStructure }) {
     e.stopPropagation();
     removeFromVocab(wordToDelete);
     setActiveMenuWord(null);
-    if (selectedWord.toLowerCase() === wordToDelete.toLowerCase()) {
-      setSelectedWord("companion");
+    if (selectedWord && selectedWord.toLowerCase() === wordToDelete.toLowerCase()) {
+      setSelectedWord(null);
     }
   };
 
@@ -132,22 +133,129 @@ export default function VocabularyPage({ onGoBackToStructure }) {
     }
   };
 
-  // --- 단어장 파일 가져오기 (Import JSON) ---
+  // --- 단어장 파일 가져오기 (Import JSON, TXT, CSV, XLSX, XLS) ---
   const handleImportVocab = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const reader = new FileReader();
+
     reader.onload = (event) => {
       try {
-        const importedData = JSON.parse(event.target.result);
-        
-        // 데이터 형식 정합성 검증
-        if (!Array.isArray(importedData)) {
-          throw new Error("올바른 백업 파일 형식이 아닙니다. (배열 형태가 아님)");
+        let validWords = [];
+
+        if (isExcel) {
+          // A. 엑셀 파일 해독 로직
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // 2차원 배열 형태로 엑셀 셀 데이터 독출
+          const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          sheetData.forEach((row, rIdx) => {
+            if (!Array.isArray(row) || row.length === 0) return;
+            
+            // 첫 번째 셀(단어)과 두 번째 셀(뜻) 추출
+            let wordCell = row[0] ? String(row[0]).trim() : '';
+            let meaningCell = row[1] ? String(row[1]).trim() : '';
+
+            // 지능형 헤더 자동 검출 및 건너뛰기
+            if (rIdx === 0 && (
+              wordCell.toLowerCase() === 'word' || 
+              wordCell === '단어' || 
+              wordCell.toLowerCase() === 'vocabulary' ||
+              meaningCell.toLowerCase() === 'meaning' ||
+              meaningCell === '뜻' ||
+              meaningCell.toLowerCase() === 'definition'
+            )) {
+              return; 
+            }
+
+            if (wordCell) {
+              validWords.push({
+                word: wordCell,
+                meaning: meaningCell,
+                synonyms: '',
+                antonyms: '',
+                similarIdioms: '',
+                sentence: '가져온 엑셀 백업'
+              });
+            }
+          });
+
+        } else {
+          // B. JSON 및 일반 텍스트(TXT/CSV) 파일 해독 로직
+          const fileContent = event.target.result;
+          
+          // 1. JSON 형태의 파일 시도
+          try {
+            const importedData = JSON.parse(fileContent);
+            if (Array.isArray(importedData)) {
+              validWords = importedData
+                .filter(item => item && typeof item === 'object' && item.word)
+                .map(item => ({
+                  word: item.word.trim(),
+                  meaning: item.meaning ? item.meaning.trim() : '',
+                  synonyms: item.synonyms || '',
+                  antonyms: item.antonyms || '',
+                  similarIdioms: item.similarIdioms || '',
+                  sentence: item.sentence || '가져온 단어 백업'
+                }));
+            }
+          } catch (jsonErr) {
+            // 2. JSON 파싱 실패 시 ➔ TXT/CSV 스마트 일반 텍스트 해독기로 전환!
+            const lines = fileContent.split(/\r?\n/);
+            lines.forEach(line => {
+              const cleanLine = line.trim();
+              if (!cleanLine) return; // 빈 줄 패스
+
+              // 쉼표(,), 콜론(:), 대시(-), 탭(\t) 구분자 스캔 분석
+              let word = '';
+              let meaning = '';
+
+              // 순차 구분자 판별 분할
+              if (cleanLine.includes('\t')) {
+                const parts = cleanLine.split('\t');
+                word = parts[0].trim();
+                meaning = parts.slice(1).join('\t').trim();
+              } else if (cleanLine.includes(' - ')) {
+                const parts = cleanLine.split(' - ');
+                word = parts[0].trim();
+                meaning = parts.slice(1).join(' - ').trim();
+              } else if (cleanLine.includes(':')) {
+                const parts = cleanLine.split(':');
+                word = parts[0].trim();
+                meaning = parts.slice(1).join(':').trim();
+              } else if (cleanLine.includes(',')) {
+                const parts = cleanLine.split(',');
+                word = parts[0].trim();
+                meaning = parts.slice(1).join(',').trim();
+              } else {
+                // 구분자가 없는 경우 ➔ 통째로 단어로 취급
+                word = cleanLine;
+              }
+
+              if (word) {
+                // 특수 기호 정제 (쌍따옴표 제거 등)
+                word = word.replace(/^["']|["']$/g, '').trim();
+                meaning = meaning.replace(/^["']|["']$/g, '').trim();
+
+                validWords.push({
+                  word: word,
+                  meaning: meaning,
+                  synonyms: '',
+                  antonyms: '',
+                  similarIdioms: '',
+                  sentence: '가져온 텍스트 백업'
+                });
+              }
+            });
+          }
         }
 
-        const validWords = importedData.filter(item => item && typeof item === 'object' && item.word);
         if (validWords.length === 0) {
           throw new Error("가져올 유효한 단어가 없습니다.");
         }
@@ -156,24 +264,32 @@ export default function VocabularyPage({ onGoBackToStructure }) {
         setMyVocab(prev => {
           const updated = [...prev];
           let addedCount = 0;
-          
+
           validWords.forEach(item => {
             if (!updated.some(existing => existing.word.toLowerCase() === item.word.toLowerCase())) {
+              // 뜻이 비어 있다면 ➔ 전역 사전 및 동적 파서 자동 매립 작동!
+              let finalMeaning = item.meaning;
+              if (!finalMeaning) {
+                const lowerWord = item.word.toLowerCase().trim();
+                const dictEntry = dictMock && dictMock[lowerWord];
+                finalMeaning = dictEntry ? (typeof dictEntry === 'object' ? dictEntry.meaning : dictEntry) : parseDynamicWordMeaning(item.word);
+              }
+
               updated.push({
-                word: item.word.trim(),
-                meaning: item.meaning ? item.meaning.trim() : '뜻 정보 없음',
+                word: item.word,
+                meaning: finalMeaning || '뜻 정보 없음',
                 synonyms: item.synonyms || '',
                 antonyms: item.antonyms || '',
                 similarIdioms: item.similarIdioms || '',
                 sentence: item.sentence || '가져온 단어 백업',
-                addedAt: item.addedAt || new Date().toISOString()
+                addedAt: new Date().toISOString()
               });
               addedCount++;
             }
           });
 
           speakText(`${addedCount} new words imported successfully.`);
-          alert(`⭐ 단어장 복원 완료!\n새로운 단어 ${addedCount}개가 단어장에 추가되었습니다.`);
+          alert(`⭐ 단어장 불러오기 완료!\n새로운 단어 ${addedCount}개가 성공적으로 추가되었습니다.`);
           return updated;
         });
 
@@ -184,11 +300,18 @@ export default function VocabularyPage({ onGoBackToStructure }) {
         e.target.value = ''; // 파일 인풋 값 초기화
       }
     };
-    reader.readAsText(file);
+
+    // 엑셀은 어레이 버퍼로, 나머지는 텍스트로 읽음
+    if (isExcel) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
   };
 
   // --- 실시간 뜻 보정 헬퍼 ---
   const getCorrectedMeaning = (item) => {
+    if (!item || !item.word) return '뜻 정보 없음';
     const cleanWord = item.word.toLowerCase().trim();
     const cleanMeaning = item.meaning ? item.meaning.trim() : '';
     
@@ -197,7 +320,7 @@ export default function VocabularyPage({ onGoBackToStructure }) {
         cleanMeaning.includes('(학습용 추천 단어)') || 
         cleanMeaning.includes('뜻을 알 수 없음') || 
         cleanMeaning === item.word) {
-      const entry = dictMock[cleanWord];
+      const entry = dictMock && dictMock[cleanWord];
       return entry ? (typeof entry === 'object' ? entry.meaning : entry) : parseDynamicWordMeaning(item.word);
     }
     return item.meaning;
@@ -205,11 +328,24 @@ export default function VocabularyPage({ onGoBackToStructure }) {
 
   // --- 선택된 단어 상세 정보 족보 동적 연합기 ---
   const activeWordDetail = useMemo(() => {
+    if (!selectedWord) {
+      return {
+        word: "",
+        partOfSpeech: "",
+        pronunciation: "",
+        meaning: "",
+        synonyms: [],
+        antonyms: [],
+        idioms: [],
+        exampleEng: "",
+        exampleKor: ""
+      };
+    }
     const lower = selectedWord.toLowerCase().trim();
-    const foundDefault = defaultWords.find(w => w.word.toLowerCase() === lower);
+    const foundDefault = defaultWords.find(w => w.word && w.word.toLowerCase() === lower);
     if (foundDefault) return foundDefault;
 
-    const foundEntry = dictMock[lower];
+    const foundEntry = dictMock && dictMock[lower];
     if (foundEntry && typeof foundEntry === 'object') {
       const synonymsArray = foundEntry.synonyms ? foundEntry.synonyms.split(',').map(s => s.trim()) : [];
       const antonymsArray = foundEntry.antonyms ? foundEntry.antonyms.split(',').map(a => a.trim()) : [];
@@ -304,233 +440,6 @@ export default function VocabularyPage({ onGoBackToStructure }) {
       minHeight: '100%',
       overflowY: 'auto'
     }}>
-      {/* 🚀 1. Main Word Focus 섹션 */}
-      <section style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '40px', color: '#005dac' }}>star</span>
-          <h2 style={{ fontSize: '32px', fontWeight: '900', color: dynamicColorSchema.text, margin: 0 }}>
-            Main Word Focus
-          </h2>
-        </div>
-
-        {/* 메가 카드 프레임 (3D 네오브루탈리즘 그림자) */}
-        <div style={{
-          backgroundColor: dynamicColorSchema.cardBg,
-          border: `3px solid ${dynamicColorSchema.border}`,
-          borderRadius: '24px',
-          padding: '32px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '32px',
-          boxShadow: `8px 8px 0px 0px ${dynamicColorSchema.border === 'var(--color-border)' ? 'rgba(0,0,0,0.15)' : dynamicColorSchema.border}`,
-          transition: 'all 0.15s ease'
-        }}>
-          {/* 단어 및 발음기호 + 거대 3D 스피커 플로팅 단추 */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <span style={{
-                fontSize: `${fontSize * 1.3}px`,
-                fontWeight: '900',
-                color: '#005dac',
-                letterSpacing: '0.05em',
-                wordBreak: 'break-all'
-              }}>
-                {activeWordDetail.word}
-              </span>
-              <p style={{
-                fontSize: '24px',
-                fontWeight: '900',
-                color: '#5f6365',
-                marginTop: '12px',
-                margin: '12px 0 0 0'
-              }}>
-                {activeWordDetail.pronunciation}
-              </p>
-            </div>
-            <button
-              onClick={() => speakText(activeWordDetail.word)}
-              className="material-symbols-outlined active-scale"
-              style={{
-                fontSize: '56px',
-                backgroundColor: '#005dac',
-                color: '#ffffff',
-                width: '84px',
-                height: '84px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0px 4px 12px rgba(0, 93, 172, 0.3)',
-                transition: 'transform 0.1s'
-              }}
-              aria-label="Listen to pronunciation"
-            >
-              volume_up
-            </button>
-          </div>
-
-          {/* 품사 및 뜻 */}
-          <div style={{
-            borderTop: `2px solid ${theme === 'dark' ? '#444' : '#e0e3e5'}`,
-            paddingTop: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <div>
-              <span style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                backgroundColor: '#dde0e2',
-                borderRadius: '9999px',
-                fontSize: '20px',
-                fontWeight: '900',
-                color: '#5f6365'
-              }}>
-                {activeWordDetail.partOfSpeech}
-              </span>
-            </div>
-            <p style={{
-              fontSize: `${fontSize * 0.95}px`,
-              fontWeight: '700',
-              color: dynamicColorSchema.text,
-              margin: 0
-            }}>
-              {activeWordDetail.meaning}
-            </p>
-          </div>
-
-          {/* 동의어 (Synonyms) & 반의어 (Antonyms) grid 쪼개기 */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px'
-          }}>
-            {/* Synonyms 박스 */}
-            <div style={{
-              backgroundColor: dynamicColorSchema.synonymBg,
-              padding: '24px',
-              borderRadius: '16px',
-              border: `2px solid ${theme === 'dark' ? '#444' : '#c1c6d4'}`
-            }}>
-              <p style={{
-                fontSize: '24px',
-                fontWeight: '900',
-                color: dynamicColorSchema.synonymText,
-                margin: '0 0 12px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add_circle</span>
-                Synonyms
-              </p>
-              <p style={{ fontSize: '24px', fontWeight: '500', color: dynamicColorSchema.text, margin: 0 }}>
-                {activeWordDetail.synonyms.join(', ')}
-              </p>
-            </div>
-
-            {/* Antonyms 박스 */}
-            <div style={{
-              backgroundColor: dynamicColorSchema.synonymBg, // low-container 색 동일 활용
-              padding: '24px',
-              borderRadius: '16px',
-              border: `2px solid ${theme === 'dark' ? '#444' : '#c1c6d4'}`
-            }}>
-              <p style={{
-                fontSize: '24px',
-                fontWeight: '900',
-                color: dynamicColorSchema.antonymText,
-                margin: '0 0 12px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>remove_circle</span>
-                Antonyms
-              </p>
-              <p style={{ fontSize: '24px', fontWeight: '500', color: dynamicColorSchema.text, margin: 0 }}>
-                {activeWordDetail.antonyms.join(', ')}
-              </p>
-            </div>
-          </div>
-
-          {/* 관련 이디엄 숙어 박스 */}
-          <div style={{
-            backgroundColor: dynamicColorSchema.idiomBg,
-            padding: '24px',
-            borderRadius: '16px',
-            border: `2px solid ${dynamicColorSchema.border}`
-          }}>
-            <p style={{
-              fontSize: '24px',
-              fontWeight: '900',
-              color: '#005dac',
-              margin: '0 0 12px 0'
-            }}>
-              Related Idioms / Phrases:
-            </p>
-            <ul style={{
-              fontSize: '22px',
-              fontWeight: '500',
-              color: dynamicColorSchema.text,
-              listStyleType: 'disc',
-              listStylePosition: 'inside',
-              padding: 0,
-              margin: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {activeWordDetail.idioms.map((idm, idx) => (
-                <li key={idx}>
-                  <span style={{ fontWeight: '900', fontStyle: 'italic' }}>{idm.eng}:</span> {idm.kor}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* 예문 박스 */}
-          <div style={{
-            backgroundColor: dynamicColorSchema.exampleBg,
-            padding: '24px',
-            borderRadius: '16px',
-            border: `2px solid ${dynamicColorSchema.border}`
-          }}>
-            <p style={{
-              fontSize: '24px',
-              fontWeight: '900',
-              color: '#005dac',
-              margin: '0 0 16px 0'
-            }}>
-              Example Sentence:
-            </p>
-            <p style={{
-              fontSize: `${fontSize * 0.85}px`,
-              fontWeight: '900',
-              fontStyle: 'italic',
-              color: dynamicColorSchema.text,
-              lineHeight: '1.5',
-              margin: 0
-            }}>
-              "{activeWordDetail.exampleEng}"
-            </p>
-            <p style={{
-              fontSize: '22px',
-              fontWeight: '500',
-              color: dynamicColorSchema.text,
-              opacity: 0.8,
-              marginTop: '12px',
-              margin: '12px 0 0 0'
-            }}>
-              "{activeWordDetail.exampleKor}"
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* 🚀 2. My Vocabulary List 섹션 */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -538,25 +447,6 @@ export default function VocabularyPage({ onGoBackToStructure }) {
           <h2 style={{ fontSize: '32px', fontWeight: '900', color: dynamicColorSchema.text, margin: 0 }}>
             My Vocabulary List
           </h2>
-        </div>
-
-        {/* 인포 설명 팁 배너 */}
-        <div style={{
-          backgroundColor: theme === 'dark' ? '#252525' : '#ffffff',
-          border: `2px solid ${dynamicColorSchema.border}`,
-          borderRadius: '16px',
-          padding: '20px 24px',
-          fontStyle: 'italic',
-          fontSize: '22px',
-          fontWeight: '500',
-          color: '#5f6365',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          boxShadow: '0px 2px 6px rgba(0,0,0,0.02)'
-        }}>
-          <span className="material-symbols-outlined" style={{ color: '#005dac', fontSize: '28px' }}>info</span>
-          Touch unknown words in the text to add them here!
         </div>
 
         {/* 📥 로컬 무설치 백업 및 복원 패널 */}
@@ -639,7 +529,7 @@ export default function VocabularyPage({ onGoBackToStructure }) {
             <input
               type="file"
               id="vocab-import-input"
-              accept=".json"
+              accept=".xlsx,.xls,.json,.txt,.csv"
               onChange={handleImportVocab}
               style={{ display: 'none' }}
             />
@@ -663,7 +553,8 @@ export default function VocabularyPage({ onGoBackToStructure }) {
             </div>
           ) : (
             myVocab.map((item, idx) => {
-              const isSelected = selectedWord.toLowerCase() === item.word.toLowerCase();
+              if (!item || !item.word) return null;
+              const isSelected = selectedWord && selectedWord.toLowerCase() === item.word.toLowerCase();
               const isMenuOpen = activeMenuWord === item.word;
 
               return (
@@ -852,6 +743,272 @@ export default function VocabularyPage({ onGoBackToStructure }) {
           <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>check_circle</span>
         </button>
       </div>
+
+      {/* 어휘 상세 정보 3D 네오브루탈리즘 오버레이 모달 */}
+      {selectedWord && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 1500,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            backgroundColor: dynamicColorSchema.cardBg,
+            border: `6px solid ${dynamicColorSchema.border}`,
+            borderRadius: '32px',
+            padding: '32px',
+            width: '100%',
+            maxWidth: '640px',
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            boxShadow: `12px 12px 0px 0px ${dynamicColorSchema.border === 'var(--color-border)' ? 'rgba(0,0,0,0.3)' : dynamicColorSchema.border}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            position: 'relative',
+            color: dynamicColorSchema.text
+          }}>
+            {/* 단어 및 발음기호 + 스피커 버튼 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+              <div>
+                <span style={{
+                  fontSize: `${fontSize * 1.3}px`,
+                  fontWeight: '900',
+                  color: '#005dac',
+                  letterSpacing: '0.05em',
+                  wordBreak: 'break-all'
+                }}>
+                  {activeWordDetail.word}
+                </span>
+                <p style={{
+                  fontSize: '24px',
+                  fontWeight: '900',
+                  color: '#5f6365',
+                  margin: '12px 0 0 0'
+                }}>
+                  {activeWordDetail.pronunciation}
+                </p>
+              </div>
+              <button
+                onClick={() => speakText(activeWordDetail.word)}
+                className="material-symbols-outlined active-scale"
+                style={{
+                  fontSize: '48px',
+                  backgroundColor: '#005dac',
+                  color: '#ffffff',
+                  width: '72px',
+                  height: '72px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0px 4px 12px rgba(0, 93, 172, 0.3)',
+                  transition: 'transform 0.1s',
+                  flexShrink: 0
+                }}
+                aria-label="Listen to pronunciation"
+              >
+                volume_up
+              </button>
+            </div>
+
+            {/* 품사 및 뜻 */}
+            <div style={{
+              borderTop: `2px solid ${theme === 'dark' ? '#444' : '#e0e3e5'}`,
+              paddingTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '8px 16px',
+                  backgroundColor: theme === 'dark' ? '#333333' : '#dde0e2',
+                  borderRadius: '9999px',
+                  fontSize: '20px',
+                  fontWeight: '900',
+                  color: theme === 'dark' ? '#ffffff' : '#5f6365'
+                }}>
+                  {activeWordDetail.partOfSpeech}
+                </span>
+              </div>
+              <p style={{
+                fontSize: `${fontSize * 0.95}px`,
+                fontWeight: '700',
+                color: dynamicColorSchema.text,
+                margin: 0
+              }}>
+                {activeWordDetail.meaning}
+              </p>
+            </div>
+
+            {/* 동의어 & 반의어 */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px'
+            }}>
+              {/* Synonyms */}
+              <div style={{
+                backgroundColor: dynamicColorSchema.synonymBg,
+                padding: '20px',
+                borderRadius: '16px',
+                border: `2px solid ${theme === 'dark' ? '#444' : '#c1c6d4'}`
+              }}>
+                <p style={{
+                  fontSize: '22px',
+                  fontWeight: '900',
+                  color: dynamicColorSchema.synonymText,
+                  margin: '0 0 8px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>add_circle</span>
+                  Synonyms
+                </p>
+                <p style={{ fontSize: '22px', fontWeight: '500', color: dynamicColorSchema.text, margin: 0 }}>
+                  {activeWordDetail.synonyms && activeWordDetail.synonyms.length > 0 ? activeWordDetail.synonyms.join(', ') : 'N/A'}
+                </p>
+              </div>
+
+              {/* Antonyms */}
+              <div style={{
+                backgroundColor: dynamicColorSchema.synonymBg,
+                padding: '20px',
+                borderRadius: '16px',
+                border: `2px solid ${theme === 'dark' ? '#444' : '#c1c6d4'}`
+              }}>
+                <p style={{
+                  fontSize: '22px',
+                  fontWeight: '900',
+                  color: dynamicColorSchema.antonymText,
+                  margin: '0 0 8px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>remove_circle</span>
+                  Antonyms
+                </p>
+                <p style={{ fontSize: '22px', fontWeight: '500', color: dynamicColorSchema.text, margin: 0 }}>
+                  {activeWordDetail.antonyms && activeWordDetail.antonyms.length > 0 ? activeWordDetail.antonyms.join(', ') : 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            {/* 숙어 */}
+            {activeWordDetail.idioms && activeWordDetail.idioms.length > 0 && (
+              <div style={{
+                backgroundColor: dynamicColorSchema.idiomBg,
+                padding: '20px',
+                borderRadius: '16px',
+                border: `2px solid ${dynamicColorSchema.border}`
+              }}>
+                <p style={{
+                  fontSize: '22px',
+                  fontWeight: '900',
+                  color: '#005dac',
+                  margin: '0 0 8px 0'
+                }}>
+                  Related Idioms / Phrases:
+                </p>
+                <ul style={{
+                  fontSize: '20px',
+                  fontWeight: '500',
+                  color: dynamicColorSchema.text,
+                  listStyleType: 'disc',
+                  listStylePosition: 'inside',
+                  padding: 0,
+                  margin: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  {activeWordDetail.idioms.map((idm, idx) => (
+                    <li key={idx}>
+                      <span style={{ fontWeight: '900', fontStyle: 'italic' }}>{idm.eng}:</span> {idm.kor}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 예문 */}
+            <div style={{
+              backgroundColor: dynamicColorSchema.exampleBg,
+              padding: '20px',
+              borderRadius: '16px',
+              border: `2px solid ${dynamicColorSchema.border}`
+            }}>
+              <p style={{
+                fontSize: '22px',
+                fontWeight: '900',
+                color: '#005dac',
+                margin: '0 0 12px 0'
+              }}>
+                Example Sentence:
+              </p>
+              <p style={{
+                fontSize: `${fontSize * 0.85}px`,
+                fontWeight: '900',
+                fontStyle: 'italic',
+                color: dynamicColorSchema.text,
+                lineHeight: '1.5',
+                margin: 0
+              }}>
+                "{activeWordDetail.exampleEng}"
+              </p>
+              <p style={{
+                fontSize: '20px',
+                fontWeight: '500',
+                color: dynamicColorSchema.text,
+                opacity: 0.8,
+                margin: '8px 0 0 0'
+              }}>
+                "{activeWordDetail.exampleKor}"
+              </p>
+            </div>
+
+            {/* 하단 닫기 버튼 */}
+            <button
+              onClick={() => setSelectedWord(null)}
+              className="active-scale"
+              style={{
+                width: '100%',
+                height: '72px',
+                backgroundColor: '#005dac',
+                color: '#ffffff',
+                border: `3px solid ${dynamicColorSchema.border}`,
+                borderRadius: '16px',
+                fontSize: '24px',
+                fontWeight: '900',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: `4px 4px 0px 0px ${dynamicColorSchema.border === 'var(--color-border)' ? 'rgba(0,0,0,0.15)' : dynamicColorSchema.border}`,
+                marginTop: '12px'
+              }}
+            >
+              닫기 (Close)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 🏆 [100% 동일 구현] GREAT JOB! 일일 학습 성과 보고서 풀스크린 모달 */}
       {showAchievement && (

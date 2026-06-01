@@ -26,6 +26,14 @@ export default function StudyContainerPage({ passage, onBack }) {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('follow'); // 'follow' | 'chunk' | 'structure' | 'vocab'
+  const [lastActiveTab, setLastActiveTab] = useState('follow');
+
+  const handleTabChange = (newTab) => {
+    if (activeTab !== 'vocab') {
+      setLastActiveTab(activeTab);
+    }
+    setActiveTab(newTab);
+  };
   const [showPanel, setShowPanel] = useState(false);
 
   const currentPassage = passage || activePassage;
@@ -401,11 +409,11 @@ export default function StudyContainerPage({ passage, onBack }) {
 
       {/* 2. 중앙 메인 컨텐츠 영역 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'follow' && <ClassFollowModePage />}
+        {activeTab === 'follow' && <ClassFollowModePage onGoToVocab={() => handleTabChange('vocab')} />}
         {activeTab === 'chunk' && <ChunkReadingPage />}
         {activeTab === 'structure' && <ParagraphStructurePage />}
         {activeTab === 'vocab' && (
-          <VocabularyPage onGoBackToStructure={() => setActiveTab('structure')} />
+          <VocabularyPage onGoBackToStructure={() => setActiveTab(lastActiveTab)} />
         )}
       </div>
 

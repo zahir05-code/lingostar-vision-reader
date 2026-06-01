@@ -97,8 +97,19 @@ const generateDetailedGrammarGuide = (text) => {
   }
 };
 
-export default function ClassFollowModePage() {
-  const { activePassage, currentSentenceIndex, fontSize, speakText, addToVocab, dictMock, parseDynamicWordMeaning } = useApp(); // 전역 AppContext 연동
+export default function ClassFollowModePage({ onGoToVocab }) {
+  const { 
+    activePassage, 
+    currentSentenceIndex, 
+    fontSize, 
+    speakText, 
+    addToVocab, 
+    removeFromVocab,
+    myVocab = [],
+    dictMock, 
+    parseDynamicWordMeaning,
+    fetchLiveWordDefinition
+  } = useApp(); // 전역 AppContext 연동
   
   // 모달 팝업 상태
   const [selectedWord, setSelectedWord] = useState(null);
@@ -166,21 +177,26 @@ export default function ClassFollowModePage() {
   };
 
   // 플로팅 드래그 단어 추가 버튼 클릭 핸들러
-  const handleAddDraggedText = () => {
+  const handleAddDraggedText = async () => {
     if (!draggedText) return;
-    const lower = draggedText.toLowerCase();
-    
-    // 사전 매핑 또는 동적 유추
-    const foundMeaning = dictMock[lower] || parseDynamicWordMeaning(draggedText);
-    
-    setSelectedWord(draggedText);
-    setMeaning(foundMeaning);
+    const cleanWord = draggedText.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim();
+    if (!cleanWord) return;
+
+    setSelectedWord(cleanWord);
     setDraggedText('');
     window.getSelection().removeAllRanges(); // 드래그 영역 해제
+    
+    setMeaning('뜻을 불러오는 중...');
+    const entry = await fetchLiveWordDefinition(cleanWord);
+    if (entry) {
+      setMeaning(entry.meaning);
+    } else {
+      setMeaning(parseDynamicWordMeaning(cleanWord));
+    }
   };
 
   // 단어 클릭 핸들러 (단일 클릭 모드 vs 다중 선택 모드)
-  const handleWordClick = (rawWord, index) => {
+  const handleWordClick = async (rawWord, index) => {
     // 문장부호 제거
     const cleanWord = rawWord.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim();
     if (!cleanWord) return;
@@ -195,11 +211,15 @@ export default function ClassFollowModePage() {
       }
     } else {
       // 단일 클릭 모드: 기존 팝업 오픈
-      const lower = cleanWord.toLowerCase();
-      const foundMeaning = dictMock[lower] || parseDynamicWordMeaning(cleanWord);
-      
       setSelectedWord(cleanWord);
-      setMeaning(foundMeaning);
+      setMeaning('뜻을 불러오는 중...');
+      
+      const entry = await fetchLiveWordDefinition(cleanWord);
+      if (entry) {
+        setMeaning(entry.meaning);
+      } else {
+        setMeaning(parseDynamicWordMeaning(cleanWord));
+      }
     }
   };
 
@@ -291,16 +311,13 @@ export default function ClassFollowModePage() {
           🔊 원어민 낭독 (TTS)
         </BigButton>
 
-        {/* 다중 단어 선택 토글 버튼 */}
+        {/* 나의 단어장 탭 이동 단축 버튼 */}
         <BigButton
-          variant={multiSelectMode ? 'primary' : 'secondary'}
-          onClick={() => {
-            setMultiSelectMode(!multiSelectMode);
-            setSelectedIndices([]); // 선택 인덱스 초기화
-          }}
+          variant="secondary"
+          onClick={onGoToVocab}
           style={{ flex: '1 1 280px' }}
         >
-          {multiSelectMode ? '🔘 숙어 선택 모드: [켜짐]' : '⚪ 숙어 다중선택 모드'}
+          ⭐ 나의 단어장
         </BigButton>
       </div>
 
@@ -429,74 +446,130 @@ export default function ClassFollowModePage() {
       {/* ✨ 초정밀 영어 문장 구조식 직독직해 학습 가이드 */}
 
       {/* 단어/숙어 간이 사전 팝업 모달 */}
-      {selectedWord && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'var(--color-bg)',
-          border: '5px solid var(--color-primary)',
-          borderRadius: '24px',
-          padding: '32px',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
-          zIndex: 1000,
-          width: '90%',
-          maxWidth: '550px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px',
-          textAlign: 'center',
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
-          <div>
-            <span style={{ 
-              fontSize: '18px', 
-              fontWeight: 'bold', 
-              color: 'var(--color-text)', 
-              opacity: 0.6,
-              border: '2px solid var(--color-border)',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              backgroundColor: 'var(--color-secondary)'
-            }}>
-              {selectedWord.includes(' ') ? '📝 이디엄 / 숙어' : '📒 단어'}
-            </span>
-            <h3 style={{ fontSize: '38px', fontWeight: '900', color: 'var(--color-primary)', marginTop: '16px', wordBreak: 'break-all' }}>
-              {selectedWord}
-            </h3>
-            <div style={{ 
-              fontSize: '28px', 
-              fontWeight: 'bold', 
-              marginTop: '16px',
-              padding: '16px',
-              backgroundColor: 'var(--color-secondary)',
-              borderRadius: '12px',
-              border: '2px solid var(--color-border)',
-              lineHeight: '1.4'
-            }}>
-              뜻: {meaning}
+      {selectedWord && (() => {
+        const isSaved = myVocab.some(item => item.word.toLowerCase() === selectedWord.toLowerCase());
+        return (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'var(--color-bg)',
+            border: '5px solid var(--color-primary)',
+            borderRadius: '24px',
+            padding: '32px',
+            boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+            zIndex: 1000,
+            width: '90%',
+            maxWidth: '550px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            textAlign: 'center',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div>
+              <span style={{ 
+                fontSize: '18px', 
+                fontWeight: 'bold', 
+                color: 'var(--color-text)', 
+                opacity: 0.6,
+                border: '2px solid var(--color-border)',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                backgroundColor: 'var(--color-secondary)'
+              }}>
+                {selectedWord.includes(' ') ? '📝 이디엄 / 숙어' : '📒 단어'}
+              </span>
+              <h3 style={{ fontSize: '38px', fontWeight: '900', color: 'var(--color-primary)', marginTop: '16px', wordBreak: 'break-all' }}>
+                {selectedWord}
+              </h3>
+              <div style={{ 
+                fontSize: '28px', 
+                fontWeight: 'bold', 
+                marginTop: '16px',
+                padding: '16px',
+                backgroundColor: 'var(--color-secondary)',
+                borderRadius: '12px',
+                border: '2px solid var(--color-border)',
+                lineHeight: '1.4'
+              }}>
+                뜻: {meaning}
+              </div>
+
+              {/* 저장 상태 고대비 배지 */}
+              {isSaved ? (
+                <div style={{
+                  backgroundColor: '#ebfbee',
+                  color: '#2b8a3e',
+                  border: '3px solid #000000',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontSize: '20px',
+                  fontWeight: '900',
+                  boxShadow: '3px 3px 0px 0px #000000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  fontFamily: "'Outfit', 'Inter', sans-serif"
+                }}>
+                  <span>✓</span>
+                  <span>나의 단어장에 저장되어 있습니다.</span>
+                </div>
+              ) : (
+                <div style={{
+                  backgroundColor: '#f1f3f5',
+                  color: '#495057',
+                  border: '3px solid #000000',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontSize: '20px',
+                  fontWeight: '900',
+                  boxShadow: '3px 3px 0px 0px #000000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  fontFamily: "'Outfit', 'Inter', sans-serif"
+                }}>
+                  <span>⚪</span>
+                  <span>아직 단어장에 저장되지 않았습니다.</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <BigButton
+                variant={isSaved ? "danger" : "success"}
+                onClick={() => {
+                  if (isSaved) {
+                    removeFromVocab(selectedWord);
+                  } else {
+                    addToVocab(selectedWord, meaning, currentSentence);
+                  }
+                }}
+                style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
+              >
+                {isSaved ? "❌ 단어장 제거" : "⭐ 단어장 저장"}
+              </BigButton>
+              <BigButton
+                variant="secondary"
+                onClick={() => {
+                  setSelectedWord(null);
+                  setSelectedIndices([]);
+                  setDraggedText('');
+                }}
+                style={{ flex: 1, minHeight: '64px', fontSize: '20px' }}
+              >
+                닫기
+              </BigButton>
             </div>
           </div>
-
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <BigButton
-              variant="success"
-              onClick={handleSaveToVocab}
-              style={{ flex: 2 }}
-            >
-              ⭐ 단어장 추가
-            </BigButton>
-            <BigButton
-              variant="secondary"
-              onClick={() => setSelectedWord(null)}
-              style={{ flex: 1 }}
-            >
-              닫기
-            </BigButton>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 스타일 애니메이션 주입 */}
       <style>{`

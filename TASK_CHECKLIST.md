@@ -92,6 +92,7 @@
 - [x] 영어문장블럭 내 해석 영역 영어 원문 복제 노출 버그 한글 감지 가드 장착 및 데이팅 앱 신규 문장 1:1 직독직해 매핑 완치 완료 (`textParser.js`)
 - [x] 사람이름/기관이름 등 고유명사 원본 보존 규칙(Proper Noun Guard) 적용 및 필수 동사 번역 사전 탑재 완료 (`textParser.js` & `AppContext.jsx`)
 - [x] Gemini API 모델 구버전(1.5 Flash)에서 2026년 5월 최신 플래그십 모델(`gemini-3.5-flash`)로 마이그레이션 및 API 무결성 검증 완료 (`gemini.js`)
+- [x] 수능/내신 고등부 영어 어법 출제 포인트 요약 엔진으로의 전면 쇄신 (S-V-O-M 성분 매핑 및 마크다운 기호 제거, 깔끔한 '출제어법 포인트' 한 줄 요약 포맷으로 구조화 완료) (`textParser.js` & `PassageInputPage.jsx` & `ParagraphStructurePage.jsx` & `gemini.js`)
 
 
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BigButton } from '../components/BigButton';
-import { splitIntoSentences, parseFullPassage, splitIntoChunks } from '../utils/textParser';
+import { splitIntoSentences, parseFullPassage, splitIntoChunks, detectGrammarPoint } from '../utils/textParser';
 import { uploadPassage } from '../utils/firebase';
 import { useApp } from '../context/AppContext';
 import { analyzeRawPassageWithGemini, parseAnalyzedMaterialWithGemini } from '../utils/gemini';
@@ -82,21 +82,25 @@ export default function PassageInputPage({ onSave, onCancel }) {
             const reconstructedText = result.sentences.map(s => s.english).join(' ');
             setText(reconstructedText);
             
-            // 매핑 상태 구성 (직독직해 번역 미리 적용) - chunks 안전 복구 탑재 (유효 글자 청크 가드 이식)
+            // 매핑 상태 구성
             setSentenceMappings(result.sentences.map(s => {
-              // 텍스트가 실제로 있고 비어 있지 않은 유효 청크만 수집
               let finalChunks = (s.chunks || []).filter(c => c && c.text && c.text.trim().length > 0);
               if (finalChunks.length === 0) {
-                // AI 응답 chunks가 빈 배열이거나 쓸데없는 노이즈로 비어 있을 때 오프라인 구동 실시간 치유
                 finalChunks = splitIntoChunks(s.english || s.text, dictMock);
               }
+              const defaultDirect = s.directTranslation || finalChunks.map(c => c.meaning || '번역').join(' / ');
+              const defaultNatural = s.naturalTranslation || s.meaning || finalChunks.map(c => c.meaning || '번역').join(' ').replace(/\s+/g, ' ');
+              const defaultStructure = s.structureAnalysis || detectGrammarPoint(s.english || s.text);
+
               return {
                 english: s.english,
+                directTranslation: defaultDirect,
+                naturalTranslation: defaultNatural,
+                structureAnalysis: defaultStructure,
                 chunks: finalChunks.map(c => ({
                   text: c.text || s.english,
                   meaning: c.meaning || c.text || "해석 정보가 없습니다.",
-                  tag: c.tag || "S+V",
-                  userKorean: c.meaning || c.text || "해석 정보가 없습니다." // AI 번역 적용
+                  tag: c.tag || "S+V"
                 }))
               };
             }));
@@ -104,7 +108,7 @@ export default function PassageInputPage({ onSave, onCancel }) {
             setGeneratedVocab(result.vocab || []);
             setBgKnowledge(result.backgroundKnowledge || '');
             setStep(2);
-            alert('🎉 [AI 스마트 외부자료 해독 대성공]\n유료 분석자료 텍스트의 영어문장, 슬래시 청크, 직독직해가 한 번에 완벽 해독되어 3D Neobrutalism 배리어프리 리더 뷰에 매핑되었습니다!');
+            alert('🎉 [AI 스마트 외부자료 해독 대성공]\n3단계 번역 및 문장 구조식 템플릿이 한 번에 완벽 해독되어 3D Neobrutalism 편집 뷰에 매핑되었습니다!');
           } else {
             throw new Error("지문 구조 해독에 실패했습니다.");
           }
@@ -115,19 +119,25 @@ export default function PassageInputPage({ onSave, onCancel }) {
           if (result && result.sentences && result.sentences.length > 0) {
             setTitle(result.title || 'AI 분석 지문');
             
-            // 매핑 상태 구성 (직독직해 번역 미리 적용) - chunks 안전 복구 탑재 (유효 글자 청크 가드 이식)
+            // 매핑 상태 구성
             setSentenceMappings(result.sentences.map(s => {
               let finalChunks = (s.chunks || []).filter(c => c && c.text && c.text.trim().length > 0);
               if (finalChunks.length === 0) {
                 finalChunks = splitIntoChunks(s.english || s.text, dictMock);
               }
+              const defaultDirect = s.directTranslation || finalChunks.map(c => c.meaning || '번역').join(' / ');
+              const defaultNatural = s.naturalTranslation || s.meaning || finalChunks.map(c => c.meaning || '번역').join(' ').replace(/\s+/g, ' ');
+              const defaultStructure = s.structureAnalysis || detectGrammarPoint(s.english || s.text);
+
               return {
                 english: s.english,
+                directTranslation: defaultDirect,
+                naturalTranslation: defaultNatural,
+                structureAnalysis: defaultStructure,
                 chunks: finalChunks.map(c => ({
                   text: c.text || s.english,
                   meaning: c.meaning || c.text || "해석 정보가 없습니다.",
-                  tag: c.tag || "S+V",
-                  userKorean: c.meaning || c.text || "해석 정보가 없습니다." // AI 번역 적용
+                  tag: c.tag || "S+V"
                 }))
               };
             }));
@@ -156,7 +166,7 @@ export default function PassageInputPage({ onSave, onCancel }) {
   };
 
   const runOfflineParsing = () => {
-    // [💡 Safeguard] 복사/붙여넣기 지문 내용 자동 감지 기반 고품질 배경지식 동적 주입!
+    // [💡 Safeguard] 복사/붙여넣기 지문 내용 자동 감지 및 과학/역사/철학/교육/심리/문화 동적 배경지식 자동 생성 엔진 가동!
     const lowerText = text.toLowerCase();
     let detectedBg = '';
     
@@ -168,35 +178,71 @@ export default function PassageInputPage({ onSave, onCancel }) {
       detectedBg = "인류 역사상 개가 인간의 최초의 동반자가 된 생물학적 배경을 다룹니다. 개와의 상호작용이 스트레스 호르몬인 코르티솔(Cortisol) 수치를 낮추고 옥시토신 분비를 촉진한다는 현대 의학적 연구 결과는 단순한 애완동물을 넘어 정서 치유와 심리적 안정감을 제공하는 배리어프리 동물 매개 치료 맥락과 깊게 연결되어 있습니다.";
     } else if (lowerText.includes('dating') || lowerText.includes('fernanda') || lowerText.includes('apps')) {
       detectedBg = "현대 디지털 사회에서 데이팅 앱과 같은 알고리즘 기반 매칭 기술이 인간 관계에 미치는 심리적/사회적 영향을 다룹니다. 편리한 연결 이면에 숨겨진 피로감과 인간 소외 현상을 성찰하게 하며, 인위적인 디지털 매칭에서 벗어나 주체적이고 자연스러운 인간 관계의 소중함을 되찾으려는 현대 사회의 디지털 디톡스(Digital Detox) 맥락을 담고 있습니다.";
+    } else if (lowerText.includes('mouse') || lowerText.includes('plague') || lowerText.includes('rodent') || lowerText.includes('cosgrove')) {
+      detectedBg = "호주 전역에서 대규모 생쥐 떼의 창궐로 인해 발생한 극심한 농업적, 경제적 위기 상황을 설명하는 지문입니다. 생쥐들이 집 안팎을 넘나들며 식량을 훼손하고 농민들을 공포로 밀어 넣는 생태계 교란과 농민들의 고통스러운 삶의 맥락을 보여줍니다.";
     } else {
-      detectedBg = "이 지문은 다양한 학술/인문 분야의 독해 능력을 기르기 위한 지문입니다. 지문에 담긴 어휘의 영한 어순 매핑과 끊어읽기 구조를 학습하며 독해력을 넓혀보세요.";
+      // 다학제 통합(과학, 역사, 철학, 교육학, 심리학, 문화예술 등) 동적 배경지식 생성 룰
+      const themes = [];
+      
+      if (/\b(science|scientific|biology|biological|medicine|medical|doctor|brain|space|physics|chemistry|nature|cell|study|research|experiment|data|system|technology)\b/i.test(lowerText)) {
+        themes.push("본 지문은 현대 과학 및 자연의 메커니즘을 규명하는 과학적 배경을 지니고 있어 객관적 사실에 기반한 탐구 정신을 보여줍니다.");
+      }
+      if (/\b(history|historical|ancient|society|social|culture|cultural|century|era|revolution|king|empire|govern|policy|war|political)\b/i.test(lowerText)) {
+        themes.push("역사적 사건이나 사회 구조의 변동을 바탕으로, 과거의 맥락이 현재 사회를 어떻게 형성했는지 이해하는 인문학적 배경을 품고 있습니다.");
+      }
+      if (/\b(philosophy|philosophical|ethic|ethics|moral|think|thought|reason|truth|value|justice|right|good|bad|reflection|mind)\b/i.test(lowerText)) {
+        themes.push("인간의 삶과 도덕적 의무, 자아의 가치에 대해 깊이 있는 성찰과 사유의 지평을 넓혀주는 철학·윤리적 사상 배경을 조명하고 있습니다.");
+      }
+      if (/\b(education|educational|learn|learning|teach|teaching|student|school|cognitive|development|skill|practice|train|training)\b/i.test(lowerText)) {
+        themes.push("인성의 도야와 배움의 가치, 인지적 발달 단계를 고찰하는 교육학적 배경을 담아 스스로 배움을 주도하는 성장 메커니즘을 보여줍니다.");
+      }
+      if (/\b(psychology|psychological|emotion|emotional|feel|feeling|stress|behavior|mental|human|empathy|self|relationship|mindset)\b/i.test(lowerText)) {
+        themes.push("인간의 감정과 정서 상태, 인지 왜곡과 상호 작용을 연구하는 심리학적 배경을 바탕으로 공감과 타인에 대한 따스한 시선을 갖추도록 돕습니다.");
+      }
+      if (/\b(art|artistic|music|paint|painting|literature|style|design|traditional|heritage|artist|creative)\b/i.test(lowerText)) {
+        themes.push("창작자의 독창적 예술 감수성과 한 시대의 가치를 담은 문화적 유산을 조명하는 예술·문화사적 배경을 지니고 있어 심미적 안목을 제공합니다.");
+      }
+      if (/\b(economic|economy|business|money|market|environment|environmental|earth|climate|energy|resource|ecology)\b/i.test(lowerText)) {
+        themes.push("자원 분배 및 합리적 경제 행위, 또는 지구 생태계 환경 보존의 경제·환경적 의제를 바탕으로 지속가능한 삶의 맥락을 환기해 줍니다.");
+      }
+
+      if (themes.length > 0) {
+        detectedBg = themes.join(" 또한, ");
+      } else {
+        detectedBg = "이 지문은 다양한 학술/인문 분야의 독해 능력을 기르기 위한 지문입니다. 지문에 담긴 어휘의 영한 어순 매핑과 끊어읽기 구조를 학습하며 독해력을 넓혀보세요.";
+      }
     }
     
     setBgKnowledge(detectedBg);
-    const cleanedSentences = splitIntoSentences(text);
 
-    if (cleanedSentences.length === 0) {
+    // [💡 통합 파싱 엔진 가동]
+    const parsedData = parseFullPassage(null, null, text, dictMock);
+
+    if (!parsedData.sentences || parsedData.sentences.length === 0) {
       alert('분석 가능한 영어 문장이 없습니다. 다시 입력해 주세요.');
       return;
     }
 
-    const autoTitle = cleanedSentences[0]
-      ? (cleanedSentences[0].length > 30 ? cleanedSentences[0].slice(0, 30) + '...' : cleanedSentences[0])
-      : '새로운 지문';
+    const autoTitle = parsedData.title && parsedData.title !== '제목 없음'
+      ? parsedData.title
+      : (parsedData.sentences[0].text.length > 30 ? parsedData.sentences[0].text.slice(0, 30) + '...' : parsedData.sentences[0].text);
     setTitle(autoTitle);
 
-    setSentenceMappings(cleanedSentences.map(english => {
-      let chunks = splitIntoChunks(english, dictMock);
-      if (!chunks || chunks.length === 0) {
-        chunks = [{ text: english, meaning: "해석 정보가 없습니다.", tag: "S+V" }];
+    setSentenceMappings(parsedData.sentences.map(s => {
+      let finalChunks = (s.chunks || []).filter(c => c && c.text && c.text.trim().length > 0);
+      if (finalChunks.length === 0) {
+        finalChunks = [{ text: s.text, meaning: "해석 정보가 없습니다.", tag: "S+V" }];
       }
+
       return {
-        english,
-        chunks: chunks.map(c => ({ 
-          text: c.text || english, 
+        english: s.text,
+        directTranslation: s.directTranslation,
+        naturalTranslation: s.naturalTranslation,
+        structureAnalysis: s.structureAnalysis || detectGrammarPoint(s.text),
+        chunks: finalChunks.map(c => ({ 
+          text: c.text || s.text, 
           meaning: c.meaning || "해석 정보가 없습니다.", 
-          tag: c.tag || "S+V", 
-          userKorean: c.meaning || '' 
+          tag: c.tag || "S+V"
         }))
       };
     }));
@@ -204,82 +250,96 @@ export default function PassageInputPage({ onSave, onCancel }) {
     setStep(2);
   };
 
-  // 청크별 한국어 변경 핸들러
-  const handleChunkKoreanChange = (sentIdx, chunkIdx, value) => {
+  // 문장별 다중 필드 변경 핸들러
+  const handleSentenceFieldChange = (sentIdx, field, value) => {
     setSentenceMappings(prev => {
       const updated = [...prev];
-      const updatedChunks = [...updated[sentIdx].chunks];
-      updatedChunks[chunkIdx] = { ...updatedChunks[chunkIdx], userKorean: value };
-      updated[sentIdx] = { ...updated[sentIdx], chunks: updatedChunks };
+      updated[sentIdx] = { ...updated[sentIdx], [field]: value };
       return updated;
     });
   };
 
-
-
-  // AI 직독직해 초안 자동 생성 (청크별 지능형 영한 결합 파서)
+  // AI 직독직해 초안 자동 생성 (3단계 모델용 결합기)
   const handleGenerateAiDraft = () => {
     setSentenceMappings(prev =>
-      prev.map(item => ({
-        ...item,
-        chunks: item.chunks.map(c => {
-          // 청크 내 단어별 뜻 수집 및 자연스러운 한글 결합
-          const wordsList = c.text.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim().split(/\s+/);
-          const translatedWords = wordsList.map(w => {
-            const lower = w.toLowerCase();
-            const entry = dictMock[lower] || parseDynamicWordMeaning(w);
-            const meaningStr = entry 
-              ? (typeof entry === 'object' ? entry.meaning : entry) 
-              : '';
-            
-            if (!meaningStr || meaningStr.includes('뜻을 알 수 없음')) return '';
-            // 여러 개의 사전 단어 뜻 중 첫 번째 대표 뜻만 추출
-            return meaningStr.split(',')[0].trim();
-          }).filter(Boolean);
-
-          let combinedMeaning = translatedWords.join(' ');
+      prev.map(item => {
+        const chunks = item.chunks || [];
+        const translatedWords = chunks.map(c => {
+          let chunkMeaning = c.meaning || '';
           
-          // 사전 매핑 결과가 없을 때의 똑똑한 가이드 번역 생성
-          if (!combinedMeaning || combinedMeaning.trim().length === 0) {
-            combinedMeaning = c.meaning 
-              ? c.meaning.replace(/^[a-zA-Z\s]+(?=행동|상태|대상|위치|~|\.\.)/, '').trim()
-              : '어순 번역 준비 완료';
+          if (!chunkMeaning || chunkMeaning.includes('준비 완료') || /[a-zA-Z]/.test(chunkMeaning)) {
+            const wordsList = c.text.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim().split(/\s+/);
+            const meanings = wordsList.map(w => {
+              const lower = w.toLowerCase();
+              const entry = dictMock[lower] || parseDynamicWordMeaning(w);
+              const meaningStr = entry 
+                ? (typeof entry === 'object' ? entry.meaning : entry) 
+                : '';
+              if (!meaningStr || meaningStr.includes('뜻을 알 수 없음')) return '';
+              return meaningStr.split(',')[0].trim();
+            }).filter(Boolean);
+            chunkMeaning = meanings.join(' ');
           }
 
+          if (!chunkMeaning || /[a-zA-Z]/.test(chunkMeaning)) {
+            chunkMeaning = '번역';
+          }
+          return chunkMeaning;
+        });
 
+        const directText = translatedWords.join(' / ');
+        const naturalText = translatedWords.join(' ').replace(/\s+/g, ' ');
 
-          return {
-            ...c,
-            userKorean: combinedMeaning
-          };
-        })
-      }))
+        return {
+          ...item,
+          directTranslation: directText,
+          naturalTranslation: naturalText
+        };
+      })
     );
   };
 
   const handleSave = () => {
     // 1. 임시 고유 ID 생성 (Firestore 업로드 완료 전에 상태 관리용으로 사용)
     const tempDocId = 'local-' + Date.now();
-    const passageData = parseFullPassage(title || '새로운 지문', grade, text, dictMock);
     
-    // AI가 추출한 어휘 딕셔너리 목록을 지문에 탑재! (B안 핵심 데이터 스키마 확장)
-    if (generatedVocab && generatedVocab.length > 0) {
-      passageData.vocab = generatedVocab;
-    }
+    // [💡 핵심 수정] parseFullPassage를 처음부터 다시 호출해 청크를 박살내는 행위를 중단합니다!
+    // 2단계에서 AI 또는 수동 편집을 통해 완벽하게 검증된 sentenceMappings 데이터를 원천 소스로 삼아 passageData를 빌드합니다.
+    const passageData = {
+      title: title || '새로운 지문',
+      grade: grade,
+      fullText: text,
+      paragraphSummaries: [],
+      backgroundKnowledge: bgKnowledge.trim() || '이 지문에 담긴 깊은 배경과 맥락을 학습하며 문해력을 넓혀보세요.',
+      vocab: generatedVocab && generatedVocab.length > 0 ? generatedVocab : []
+    };
 
-    // 배경지식 정보 주입 (입력된 값이 있으면 사용, 없으면 디폴트)
-    passageData.backgroundKnowledge = bgKnowledge.trim() || '이 지문에 담긴 깊은 배경과 맥락을 학습하며 문해력을 넓혀보세요.';
-    
-    // 청크별 사용자 번역을 passageData에 주입
-    passageData.sentences = passageData.sentences.map((sent, idx) => {
-      const mapping = sentenceMappings[idx];
-      if (!mapping) return sent;
-      return {
-        ...sent,
-        chunks: sent.chunks.map((chunk, cIdx) => ({
+    passageData.sentences = sentenceMappings.map((mapping, idx) => {
+      // 1) "직역" 텍스트를 슬래시 / 기준으로 쪼갭니다.
+      const directParts = (mapping.directTranslation || '')
+        .split('/')
+        .map(p => p.trim())
+        .filter(Boolean);
+
+      // 2) 2단계 편집 화면의 mapping.chunks 정보를 기반으로 저장 데이터 구성
+      const finalChunks = [...mapping.chunks];
+
+      // 3) 직역 조각(directParts)을 순서대로 각 청크의 meaning에 매핑하여 하위 호환성을 확보합니다.
+      const updatedChunks = finalChunks.map((chunk, cIdx) => {
+        const partMeaning = directParts[cIdx] || chunk.meaning || '어순 번역 준비 완료';
+        return {
           ...chunk,
-          meaning: (mapping.chunks[cIdx]?.userKorean) || chunk.meaning || ''
-        }))
+          meaning: partMeaning
+        };
+      });
+
+      return {
+        index: idx,
+        text: mapping.english,
+        chunks: updatedChunks,
+        directTranslation: mapping.directTranslation || '',
+        naturalTranslation: mapping.naturalTranslation || '',
+        structureAnalysis: mapping.structureAnalysis || ''
       };
     });
 
@@ -510,105 +570,130 @@ export default function PassageInputPage({ onSave, onCancel }) {
                     </span>
                   </div>
 
-                  {/* 청크별 영어 ↔ 한국어 대응 카드 */}
+                  {/* 1, 2, 3단계 직/의역 및 문법 구조 분석 통합 영역 */}
                   <div style={{ 
                     display: 'flex', 
                     flexDirection: 'column', 
-                    gap: '20px', 
-                    padding: '24px',
+                    gap: '24px', 
+                    padding: '28px',
                     backgroundColor: 'var(--color-bg)'
                   }}>
-                    {(mapping.chunks || []).map((chunk, chunkIdx) => {
-                      // 개별 청크 텍스트가 유효하지 않으면 렌더링 스킵하여 찌그러진 가로줄 생성 원천 차단!
-                      if (!chunk || !chunk.text || !chunk.text.trim()) return null;
+                    {/* 1. 영어 문장 (슬래시 청크 구분) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <p style={{
+                        fontSize: '26px',
+                        fontWeight: '900',
+                        color: 'var(--color-text)',
+                        margin: '8px 0',
+                        lineHeight: '1.6',
+                        wordBreak: 'break-word',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {mapping.chunks.map(c => c.text).join(' / ')}
+                      </p>
+                    </div>
 
-                      return (
-                        <div
-                          key={chunkIdx}
-                          className="neo-3d-card"
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '24px',
-                            backgroundColor: chunkIdx % 2 === 0 ? 'var(--color-bg)' : 'var(--color-secondary)',
-                            padding: '20px',
-                            borderRadius: '16px',
-                            border: '3px solid #5d4037',
-                            boxShadow: '4px 4px 0px 0px #5d4037',
-                            flexShrink: 0
-                          }}
-                        >
-                          {/* 좌: 영어 청크 */}
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            gap: '8px'
-                          }}>
-                            <span className="neo-badge" style={{
-                              alignSelf: 'flex-start',
-                              fontSize: '14px',
-                              fontWeight: '900',
-                              backgroundColor: '#a5c8ff',
-                              color: '#002f6c',
-                              padding: '4px 10px',
-                              borderWidth: '2px',
-                              boxShadow: '1px 1px 0px 0px #5d4037',
-                              flexShrink: 0
-                            }}>
-                              🏷️ 영어 청크 {chunkIdx + 1}
-                            </span>
-                            <p style={{
-                              fontSize: '22px',
-                              fontWeight: '900',
-                              color: 'var(--color-text)',
-                              margin: 0,
-                              lineHeight: '1.5',
-                              wordBreak: 'break-word'
-                            }}>
-                              {chunk.text}
-                            </p>
-                          </div>
+                    <div style={{ borderTop: '3px dashed #5d4037', margin: '8px 0' }}></div>
 
-                          {/* 우: 한국어 직독직해 입력 */}
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center'
-                          }}>
-                            <label style={{
-                              fontSize: '15px',
-                              fontWeight: '900',
-                              color: '#5d4037',
-                              marginBottom: '8px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}>
-                              🇰🇷 어순 직독직해 번역
-                            </label>
-                            <textarea
-                              value={chunk.userKorean || ''}
-                              onChange={(e) => handleChunkKoreanChange(sentIdx, chunkIdx, e.target.value)}
-                              placeholder={`예) ${chunk.meaning || '직독직해 번역을 입력하세요'}`}
-                              className="neo-3d-input"
-                              style={{
-                                fontSize: '20px',
-                                fontWeight: '900',
-                                padding: '12px 16px',
-                                minHeight: '60px',
-                                resize: 'vertical',
-                                lineHeight: '1.4',
-                                width: '100%',
-                                boxSizing: 'border-box',
-                                borderWidth: '3px',
-                                boxShadow: '3px 3px 0px 0px #5d4037'
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {/* 2. 직역 입력 에어리어 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{
+                        fontSize: '18px',
+                        fontWeight: '900',
+                        color: '#5d4037',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        🇰🇷 2. "직역": (슬래시 '/' 기호로 의미 덩어리 구분)
+                      </label>
+                      <textarea
+                        value={mapping.directTranslation || ''}
+                        onChange={(e) => handleSentenceFieldChange(sentIdx, 'directTranslation', e.target.value)}
+                        placeholder="예) 생쥐 창궐이 / 농민들을 공포에 떨게하고 있다 / 호주의 광할한 전역에 걸쳐..."
+                        className="neo-3d-input"
+                        style={{
+                          fontSize: '20px',
+                          fontWeight: '900',
+                          padding: '16px 20px',
+                          minHeight: '80px',
+                          resize: 'vertical',
+                          lineHeight: '1.5',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          borderWidth: '3px',
+                          boxShadow: '4px 4px 0px 0px #5d4037',
+                          backgroundColor: '#FFFDF6'
+                        }}
+                      />
+                    </div>
+
+                    {/* 3. 의역 입력 에어리어 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                      <label style={{
+                        fontSize: '18px',
+                        fontWeight: '900',
+                        color: '#5d4037',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        🇰🇷 3. "의역": (자연스러운 한국어 번역)
+                      </label>
+                      <textarea
+                        value={mapping.naturalTranslation || ''}
+                        onChange={(e) => handleSentenceFieldChange(sentIdx, 'naturalTranslation', e.target.value)}
+                        placeholder="예) 생쥐 떼의 창궐이 호주 전역의 광활한 지역을 덮치면서 농민들을 공포에 빠뜨리고..."
+                        className="neo-3d-input"
+                        style={{
+                          fontSize: '20px',
+                          fontWeight: '900',
+                          padding: '16px 20px',
+                          minHeight: '80px',
+                          resize: 'vertical',
+                          lineHeight: '1.5',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          borderWidth: '3px',
+                          boxShadow: '4px 4px 0px 0px #5d4037',
+                          backgroundColor: '#FFFDF6'
+                        }}
+                      />
+                    </div>
+
+                    {/* 4. 영어 문장 구조식 분석 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                      <label style={{
+                        fontSize: '18px',
+                        fontWeight: '900',
+                        color: '#005dac',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        📘 3. 영어 문장 구조식 분석 (구조와 기능)
+                      </label>
+                      <textarea
+                        value={mapping.structureAnalysis || ''}
+                        onChange={(e) => handleSentenceFieldChange(sentIdx, 'structureAnalysis', e.target.value)}
+                        placeholder="[주어 (Subject)] A mouse plague (명사구)&#10;[동사 (Verb)] is terrorising (현재진행형 동사구)..."
+                        className="neo-3d-input"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: '800',
+                          padding: '16px 20px',
+                          minHeight: '180px',
+                          resize: 'vertical',
+                          lineHeight: '1.6',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          borderWidth: '3px',
+                          boxShadow: '4px 4px 0px 0px #5d4037',
+                          backgroundColor: '#F5F9FF',
+                          whiteSpace: 'pre-wrap'
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               );
@@ -620,9 +705,6 @@ export default function PassageInputPage({ onSave, onCancel }) {
             <h3 style={{ fontSize: '24px', fontWeight: '900', color: '#005dac', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               💡 지문 배경지식 (Passage Background Knowledge) 설정
             </h3>
-            <p style={{ fontSize: '16px', fontWeight: '800', opacity: 0.8, margin: 0, color: 'var(--color-text)' }}>
-              지문과 관련된 과학적, 역사적, 문화적 배경지식을 입력해 두시면 학생들이 Passage Insight 단계에서 학습 배경으로 습득할 수 있습니다. (AI 스캔 시 한글 자동 생성)
-            </p>
             <textarea
               value={bgKnowledge}
               onChange={(e) => setBgKnowledge(e.target.value)}

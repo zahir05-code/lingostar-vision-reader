@@ -529,6 +529,112 @@ const dictMock = {
     meaning: "의존하다, ~에 달려있다",
     synonyms: "rely on, count on, turn to, look to, fall back on, lean on",
     similarIdioms: "rely on (~에 의존하다), count on (~을 믿다/의지하다), turn to (~에 의지하다/도움을 청하다), look to (~에게 기대를 걸다/의지하다), fall back on (~에 기대다/의지하다)"
+  },
+  "farmers": {
+    meaning: "농민들, 농부들",
+    synonyms: "peasants, growers, cultivators",
+    antonyms: "consumers"
+  },
+  "farmer": {
+    meaning: "농민, 농부",
+    synonyms: "peasant, grower, cultivator",
+    antonyms: "consumer"
+  },
+  "mouse": {
+    meaning: "생쥐, 마우스",
+    synonyms: "rodent"
+  },
+  "mice": {
+    meaning: "생쥐들",
+    synonyms: "rodents"
+  },
+  "plague": {
+    meaning: "창궐, 전염병, 재앙",
+    synonyms: "epidemic, infestation, curse",
+    antonyms: "blessing, benefit"
+  },
+  "terrorise": {
+    meaning: "공포에 떨게 하다, 위협하다",
+    synonyms: "frighten, intimidate, scare",
+    antonyms: "soothe, comfort, reassure"
+  },
+  "terrorising": {
+    meaning: "공포에 떨게 하는, 위협하는",
+    synonyms: "frightening, intimidating, scaring",
+    antonyms: "soothing, comforting"
+  },
+  "across": {
+    meaning: "~에 걸쳐, 가로질러",
+    synonyms: "throughout, over"
+  },
+  "large": {
+    meaning: "광활한, 거대한, 큰",
+    synonyms: "huge, vast, broad, massive",
+    antonyms: "small, tiny, narrow"
+  },
+  "swathes": {
+    meaning: "넓은 지역들, 구역들",
+    synonyms: "strips, bands, tracts"
+  },
+  "swathe": {
+    meaning: "넓은 지역, 구역",
+    synonyms: "strip, band, tract"
+  },
+  "rodent": {
+    meaning: "설치류, 쥐",
+    synonyms: "mouse, rat"
+  },
+  "rodents": {
+    meaning: "설치류들, 쥐들",
+    synonyms: "mice, rats"
+  },
+  "running": {
+    meaning: "달리는, 작동하는, 날뛰는",
+    synonyms: "operating, rushing"
+  },
+  "rampant": {
+    meaning: "겉잡을 수 없는, 만연하는, 날뛰는",
+    synonyms: "uncontrolled, widespread, epidemic",
+    antonyms: "controlled, rare, scarce"
+  },
+  "homes": {
+    meaning: "가정집들, 집들",
+    synonyms: "residences, houses"
+  },
+  "home": {
+    meaning: "가정, 집",
+    synonyms: "residence, house"
+  },
+  "ravage": {
+    meaning: "황폐화시키다, 파괴하다",
+    synonyms: "destroy, devastate, ruin",
+    antonyms: "restore, build, save"
+  },
+  "ravaging": {
+    meaning: "황폐화시키는, 파괴하는",
+    synonyms: "destroying, devastating, ruining",
+    antonyms: "restoring, building"
+  },
+  "fields": {
+    meaning: "밭들, 들판들, 분야들",
+    synonyms: "lands, areas, domains"
+  },
+  "field": {
+    meaning: "밭, 들판, 분야",
+    synonyms: "land, area, domain"
+  },
+  "grain": {
+    meaning: "곡물",
+    synonyms: "cereal, crop"
+  },
+  "hear": {
+    meaning: "듣다, 소문이 나다",
+    synonyms: "listen, perceive",
+    antonyms: "ignore"
+  },
+  "hearing": {
+    meaning: "청력, 듣기",
+    synonyms: "audition"
   }
 };
 
@@ -583,6 +689,62 @@ const parseDynamicWordMeaning = (word) => {
   return `${hint}(뜻을 알 수 없음 - 사전 수정 필요)`;
 };
 
+// 실시간 어휘 세부 번역 및 사전 유추 백업 엔진
+const fetchLiveWordDefinition = async (word) => {
+  const cleanWord = word.replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").trim();
+  if (!cleanWord) return null;
+  
+  const lower = cleanWord.toLowerCase();
+  
+  // 1) 로컬 사전 매칭
+  if (dictMock[lower]) {
+    const entry = dictMock[lower];
+    return typeof entry === 'object' ? { word: cleanWord, synonyms: "정보 없음", antonyms: "정보 없음", similarIdioms: "", ...entry } : { word: cleanWord, meaning: entry, synonyms: "정보 없음", antonyms: "정보 없음", similarIdioms: "" };
+  }
+  
+  // 복수/동사 굴절형 접미사 검사
+  let base = lower;
+  if (lower.endsWith('s') && lower.length > 3 && dictMock[lower.slice(0, -1)]) {
+    base = lower.slice(0, -1);
+  } else if (lower.endsWith('ed') && lower.length > 4 && dictMock[lower.slice(0, -2)]) {
+    base = lower.slice(0, -2);
+  } else if (lower.endsWith('ly') && lower.length > 4 && dictMock[lower.slice(0, -2)]) {
+    base = lower.slice(0, -2);
+  } else if (lower.endsWith('ing') && lower.length > 5 && dictMock[lower.slice(0, -3)]) {
+    base = lower.slice(0, -3);
+  }
+  
+  if (base !== lower && dictMock[base]) {
+    const entry = dictMock[base];
+    const parsedMeaning = parseDynamicWordMeaning(cleanWord);
+    return typeof entry === 'object' ? { word: cleanWord, synonyms: entry.synonyms || "정보 없음", antonyms: entry.antonyms || "정보 없음", similarIdioms: entry.similarIdioms || "", ...entry, meaning: parsedMeaning } : { word: cleanWord, meaning: parsedMeaning, synonyms: "정보 없음", antonyms: "정보 없음", similarIdioms: "" };
+  }
+
+  // 2) 실시간 Gemini API 유추 백업 작동
+  const savedKey = localStorage.getItem('lingostar_gemini_api_key') || '';
+  if (savedKey) {
+    try {
+      const { fetchWordDefinitionWithGemini } = await import('../utils/gemini');
+      const apiResult = await fetchWordDefinitionWithGemini(cleanWord, savedKey);
+      if (apiResult && apiResult.meaning && !apiResult.meaning.includes('오류')) {
+        return apiResult;
+      }
+    } catch (err) {
+      console.error("Live AI lookup failed, falling back to dynamic parser:", err);
+    }
+  }
+
+  // 3) 폴백: 동적 접미사 유추
+  const parsedMeaning = parseDynamicWordMeaning(cleanWord);
+  return {
+    word: cleanWord,
+    meaning: parsedMeaning,
+    synonyms: "정보 없음",
+    antonyms: "정보 없음",
+    similarIdioms: ""
+  };
+};
+
 // 2. LocalStorage 헬퍼 함수 정의 (오프라인 영속성 보장)
 const getUserKey = (uid, key) => {
   const cleanUid = uid || 'guest_user';
@@ -634,9 +796,11 @@ export const AppProvider = ({ children }) => {
   const [myVocab, setMyVocab] = useState(() => getLocalStorageItem(getUserKey(null, 'myVocab'), []));
   const [user, setUser] = useState(null); // Firebase Auth 인증 정보 저장용
 
-  // --- Twins Reading 8단계 스텝퍼 및 회독수 트래커 전역 상태 ---
   const [currentReadingStep, setCurrentReadingStep] = useState(1);
   const [readingCounts, setReadingCounts] = useState(() => getLocalStorageItem(getUserKey(null, 'readingCounts'), {}));
+  
+  // --- 원어민 음성(TTS) 재생 상태 트래커 ---
+  const [currentlySpeakingText, setCurrentlySpeakingText] = useState('');
 
   // --- 사용자 로그인 갱신 시 전용 데이터 역추출 동기화 효과 ---
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -725,10 +889,27 @@ export const AppProvider = ({ children }) => {
   // --- 헬퍼 액션 메서드 ---
   const speakText = (text) => {
     if ('speechSynthesis' in window) {
+      // 💡 [원어민 음성 토글 재생/정지 제어 가드]
+      // 만약 이미 말하고 있는 도중에 해당 버튼을 또 클릭했다면, 즉시 오디오 중지하고 반환!
+      if (window.speechSynthesis.speaking && currentlySpeakingText === text) {
+        window.speechSynthesis.cancel();
+        setCurrentlySpeakingText('');
+        return;
+      }
+
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
       utterance.rate = ttsRate;
+      
+      utterance.onend = () => {
+        setCurrentlySpeakingText('');
+      };
+      utterance.onerror = () => {
+        setCurrentlySpeakingText('');
+      };
+
+      setCurrentlySpeakingText(text);
       window.speechSynthesis.speak(utterance);
     } else {
       alert('원어민 발음(TTS)이 이 브라우저 환경에서 지원되지 않습니다.');
@@ -825,6 +1006,8 @@ export const AppProvider = ({ children }) => {
       user,
       setUser,
       speakText,
+      currentlySpeakingText,
+      setCurrentlySpeakingText,
       nextSentence,
       prevSentence,
       resetProgress,
@@ -832,6 +1015,7 @@ export const AppProvider = ({ children }) => {
       removeFromVocab,
       dictMock,
       parseDynamicWordMeaning,
+      fetchLiveWordDefinition,
       currentReadingStep,
       setCurrentReadingStep,
       readingCounts,
