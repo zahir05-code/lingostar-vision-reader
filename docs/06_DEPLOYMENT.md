@@ -13,11 +13,11 @@
 - **Build**: `npm run build`
 - **Output Directory**: `dist`
 
-## 3. 환경 변수 (Environment Variables)
-현재 초기 버전에서는 백엔드 API 호출이 배제되어 있으므로 (Mock Data, LocalStorage 우선) 민감한 외부 API 키가 없다. 
-향후 AI 번역 연동 시 배포 플랫폼의 Environment Variables 설정 창에서 키를 주입한다.
-- 절대로 `.env` 파일을 GitHub에 커밋하지 않는다.
-- `.env.example` 파일을 통해 필요한 환경변수 목록만 명시한다.
+## 3. 환경 변수 및 데이터 보안 (Environment Variables & Data Security)
+실제 모바일 및 웹 출시 빌드를 위해 Firebase 연동에 필요한 클라이언트 API 키 및 설정을 주입합니다.
+- **주입 키**: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` 등
+- 배포 플랫폼(Vercel/Firebase Console)의 Environment Variables 설정 탭을 통해 안전하게 주입합니다.
+- 절대로 `.env` 파일을 GitHub에 커밋하지 않고, `.env.example`을 통해 필요 사양만 안내합니다.
 
 ## 4. 배포 전 체크리스트
 - [ ] `npm run build` 성공 여부 로컬 확인

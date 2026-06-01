@@ -1,0 +1,58 @@
+/* ==========================================================================
+   LingoStar Vision Reader - 디자인 시스템 글로벌 CSS 변수 (variables.css)
+   ========================================================================== */
+
+:root {
+  /* 기본 (Light Theme) - 눈 피로가 덜한 은은한 푸른빛 백색 배경 */
+  --color-bg: hsl(210, 20%, 98%);
+  --color-text: hsl(220, 20%, 15%);
+  --color-primary: hsl(210, 100%, 43%);
+  --color-secondary: hsl(210, 20%, 93%);
+  --color-border: hsl(210, 10%, 80%);
+  
+  /* 글로벌 폰트 및 트랜지션 타이포그래피 */
+  --font-base: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --size-font-base: 32px;
+  --size-btn-height: 72px;
+  --size-touch-target: 64px;
+  --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --border-radius-mega: 16px;
+  --letter-spacing-base: 2px;
+  --line-height-base: 2.0;
+}
+
+[data-theme="dark"] {
+  /* Dark Theme - 빛번짐과 피로를 방지하는 세련된 차콜 네이비 */
+  --color-bg: hsl(220, 20%, 10%);
+  --color-text: hsl(210, 20%, 90%);
+  --color-primary: hsl(200, 100%, 60%);
+  --color-secondary: hsl(220, 15%, 18%);
+  --color-border: hsl(220, 10%, 30%);
+}
+
+[data-theme="yellow"] {
+  /* Yellow Theme - 눈부심과 대비 억제를 위한 크림 옐로우 (백내장 보조) */
+  --color-bg: hsl(45, 100%, 94%);
+  --color-text: hsl(30, 60%, 10%);
+  --color-primary: hsl(30, 100%, 25%);
+  --color-secondary: hsl(45, 100%, 82%);
+  --color-border: hsl(30, 40%, 40%);
+}
+
+[data-theme="blue-soft"] {
+  /* Blue Soft Theme - 독서 피로 완화용 소프트 스카이 */
+  --color-bg: hsl(205, 100%, 96%);
+  --color-text: hsl(215, 80%, 15%);
+  --color-primary: hsl(210, 100%, 40%);
+  --color-secondary: hsl(205, 80%, 88%);
+  --color-border: hsl(205, 50%, 75%);
+}
+
+[data-theme="high-contrast"] {
+  /* High Contrast Theme - 최중증 저시력 학습자용 형광 흑황 대비 (AAA 등급) */
+  --color-bg: hsl(0, 0%, 0%);
+  --color-text: hsl(60, 100%, 50%);
+  --color-primary: hsl(0, 0%, 100%);
+  --color-secondary: hsl(0, 0%, 15%);
+  --color-border: hsl(60, 100%, 50%);
+}

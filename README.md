@@ -12,8 +12,8 @@
 ## 기술 스택
 - **Frontend**: React, Vite
 - **Styling**: Vanilla CSS (CSS Variables를 통한 테마 관리)
-- **Data**: LocalStorage
-- **Deployment**: Vercel / Netlify
+- **Data**: Firebase Firestore (실시간 클라우드 동기화)
+- **Deployment & Hosting**: Firebase Hosting / Vercel (웹), PWA & Capacitor (모바일 앱 패키징)
 
 ## 프로젝트 구조
 ```text
@@ -44,6 +44,7 @@ npm run dev
 npm run build
 ```
 
-## 보안 및 주의사항
-- 본 앱은 초기 MVP 단계로 모든 데이터는 사용자의 로컬 브라우저(LocalStorage)에 저장됩니다.
-- API 키, 실제 비밀번호 등은 절대 소스코드에 하드코딩하지 않습니다.
+## 보안 및 서비스 운영
+- 본 앱은 모바일 앱 및 웹의 실제 배포를 위해 빌드된 정식 제품입니다.
+- 사용자 데이터는 안전한 클라우드 데이터베이스(Firebase Firestore 등)를 통해 실시간으로 암호화되어 동기화되므로, 웹과 모바일 환경 어디서나 동일하게 학습을 이어갈 수 있습니다.
+- API 키, 실제 비밀번호 등 민감정보는 배포 및 로컬 실행 시 환경 변수(`.env`) 시스템을 통해 주입하며, 소스코드에는 절대 하드코딩하지 않습니다.

@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover" />
+<title>저시력 영어 학습 도우미 — 프로토타입 v0.1</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#11192b;
+    --panel-2:#0e1626;
+    --line:#243049;
+    --text:#f3f7ff;
+    --muted:#a9b6d1;
+    --accent:#ffd24a;
+    --accent-2:#7bd3ff;
+    --ok:#7CFFB2;
+    --warn:#ffb86b;
+    --bad:#ff8a8a;
+    --reading-bg:#fffbe6;
+    --reading-fg:#1a1a1a;
+    --reading-line:#f6e9a8;
+    --font-body:'맑은 고딕','Apple SD Gothic Neo','Pretendard',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --reading-fs:34px;
+    --reading-lh:1.7;
+    --brightness:1.0;
+    --warm:0deg;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+  .app{max-width:1180px;margin:0 auto;padding:24px;filter:brightness(var(--brightness)) sepia(calc(var(--warm)/360))}
+  header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#ffd24a,#7bd3ff);display:grid;place-items:center;color:#0b1220;font-weight:900;font-size:22px}
+  h1{font-size:22px;margin:0;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:14px}
+  nav.tabs{display:flex;flex-wrap:wrap;gap:8px}
+  nav.tabs button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:12px 16px;border-radius:14px;font-size:15px;cursor:pointer;font-weight:600;font-family:inherit}
+  nav.tabs button[aria-selected="true"]{background:linear-gradient(180deg,#ffd24a,#ffbe4a);color:#0b1220;border-color:transparent}
+  .toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:18px;margin-bottom:16px}
+  .control{display:flex;flex-direction:column;gap:6px}
+  .control label{font-size:13px;color:var(--muted)}
+  .control input[type=range]{width:100%}
+  .row{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+  @media (max-width:920px){.row{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+  .card h2{margin:0 0 10px;font-size:18px}
+  .card h3{margin:14px 0 6px;font-size:15px;color:var(--accent-2)}
+  .reader{
+    background:var(--reading-bg);color:var(--reading-fg);
+    border-radius:14px;padding:22px;min-height:520px;
+    font-size:var(--reading-fs);line-height:var(--reading-lh);
+    letter-spacing:.2px;
+    box-shadow:inset 0 0 0 1px #e9d984;
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+  .reader .sent{display:block;padding:6px 4px;border-radius:8px;cursor:pointer;transition:background .12s}
+  .reader .sent:hover{background:#fff3b0}
+  .reader .sent.active{background:var(--reading-line);outline:2px solid #d8b400}
+  .reader mark.hit{background:#ffe27a;padding:0 2px;border-radius:4px}
+  .word{cursor:pointer;border-bottom:1px dotted transparent;padding:0 1px}
+  .word:hover{border-bottom-color:#b88f00;background:#fff3b0}
+  .word.saved{background:#cdeaff;border-bottom:1px solid #4a8fc0}
+  .search{display:flex;gap:8px;margin-bottom:10px}
+  .search input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0e1626;color:var(--text);font-size:16px;font-family:inherit}
+  .search button{padding:12px 16px;border-radius:12px;border:0;background:var(--accent);color:#0b1220;font-weight:800;cursor:pointer;font-family:inherit}
+  .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#22304e;color:var(--accent-2);font-size:12px;margin-right:6px}
+  .footer-hint{color:var(--muted);font-size:13px;margin-top:6px}
+  .chunk{display:grid;grid-template-columns:1fr;gap:8px;padding:12px;border:1px dashed #3a4972;border-radius:12px;margin-bottom:10px}
+  .chunk .en{font-size:20px;color:#fff}
+  .chunk .ko-hint{font-size:13px;color:var(--muted)}
+  .chunk textarea{width:100%;min-height:54px;background:#0e1626;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;font-family:inherit;resize:vertical}
+  .chunk .result{font-size:13px;color:var(--ok);min-height:18px}
+  .chunk .result.bad{color:var(--bad)}
+  .vocab-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .vocab-card{background:#0e1626;border:1px solid var(--line);border-radius:14px;padding:12px}
+  .vocab-card .w{font-size:20px;font-weight:800;color:var(--accent)}
+  .vocab-card .m{font-size:14px;color:var(--muted);margin-top:4px}
+  .vocab-card .src{font-size:12px;color:#6f7da0;margin-top:6px}
+  .summary-grid{display:grid;grid-template-columns:1fr;gap:10px}
+  .summary-grid label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+  .summary-grid textarea, .summary-grid input{background:#0e1626;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;font-family:inherit}
+  .summary-grid textarea{min-height:64px;resize:vertical}
+  .save-bar{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:var(--muted);font-size:12px;gap:8px;flex-wrap:wrap}
+  .pill{padding:4px 10px;border-radius:999px;background:#1b2541;color:var(--accent-2);font-size:12px}
+  .danger-zone button{background:#3a1f1f;border:1px solid #6b2b2b;color:#ffd2d2;padding:8px 12px;border-radius:10px;cursor:pointer;font-family:inherit}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .swatch{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid #00000022}
+  .dist{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;background:#1a2440;color:var(--text);padding:10px 14px;border-radius:999px;border:1px solid var(--line);font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+  .dist.warn{background:#3a2a16;color:var(--warn);border-color:#6b4a1f}
+  .dist .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+  .dist.warn .dot{background:var(--warn)}
+  .change-log{max-height:200px;overflow:auto;background:#0e1626;border:1px solid var(--line);border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#c5d1ee}
+  .change-log .ts{color:#8aa6e6}
+  /* theme variants */
+  body.theme-day{--bg:#f7f6ee;--panel:#fffaea;--panel-2:#fff5d0;--line:#e6dfa9;--text:#1a1a1a;--muted:#5a5a5a;--reading-bg:#ffffff;--reading-fg:#0a0a0a;--reading-line:#fff1aa}
+  body.theme-night{--bg:#000000;--panel:#0a0a0a;--panel-2:#101010;--line:#262626;--text:#fff8c8;--muted:#c4be8d;--reading-bg:#000000;--reading-fg:#fff5a3;--reading-line:#3a3000}
+  body.theme-amber{--bg:#2a1d0c;--panel:#3a280f;--panel-2:#241808;--line:#5a3f15;--text:#fde8b6;--muted:#d9bf83;--reading-bg:#f4e7c4;--reading-fg:#2b1d05;--reading-line:#f3d27a}
+  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;background:#1b2541;padding:2px 6px;border-radius:6px;color:#cfe2ff;font-size:12px}
+</style>
+</head>
+<body class="theme-night">
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo">눈</div>
+      <div>
+        <h1>저시력 영어 학습 도우미 — 프로토타입 v0.1</h1>
+        <div class="sub" id="now">현재 시각 —</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="기능 탭">
+      <button role="tab" aria-selected="true" data-tab="reader">📖 지문 뷰어</button>
+      <button role="tab" data-tab="literal">🪜 직독직해</button>
+      <button role="tab" data-tab="vocab">📒 단어장</button>
+      <button role="tab" data-tab="summary">✍️ 요약 연습</button>
+    </nav>
+  </header>
+
+  <section class="toolbar" aria-label="접근성 컨트롤">
+    <div class="control">
+      <label for="fs">글자 크기 — <span id="fsv">34</span>pt</label>
+      <input id="fs" type="range" min="16" max="96" step="2" value="34" />
+    </div>
+    <div class="control">
+      <label for="lh">줄간격 — <span id="lhv">1.7</span></label>
+      <input id="lh" type="range" min="1.2" max="2.4" step="0.1" value="1.7" />
+    </div>
+    <div class="control">
+      <label for="br">밝기 — <span id="brv">100</span>%</label>
+      <input id="br" type="range" min="40" max="120" step="2" value="100" />
+    </div>
+    <div class="control">
+      <label for="wm">색온도(앰버) — <span id="wmv">0</span>°</label>
+      <input id="wm" type="range" min="0" max="60" step="2" value="0" />
+    </div>
+    <div class="control">
+      <label for="theme">테마</label>
+      <select id="theme" style="padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit">
+        <option value="theme-night" selected>야간 (검정 + 노랑)</option>
+        <option value="theme-day">주간 (흰 + 진남)</option>
+        <option value="theme-amber">앰버 (저자극)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>거리 보조</label>
+      <button id="distBtn" style="padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);cursor:pointer;font-family:inherit">시뮬레이션 ▶</button>
+    </div>
+  </section>
+
+  <!-- 1) 지문 뷰어 -->
+  <section class="tabpanel show" id="tab-reader" role="tabpanel">
+    <div class="row">
+      <div class="card">
+        <div class="search" role="search">
+          <input id="searchInput" type="search" placeholder="본문에서 단어 찾기 (예: knowledge)" aria-label="본문 검색" />
+          <button id="searchBtn">찾기</button>
+          <button id="focusBtn" title="한 줄 집중 모드" style="background:#7bd3ff">한 줄 집중</button>
+        </div>
+        <div class="legend">
+          <span><i class="swatch" style="background:#cdeaff"></i> 단어장에 담긴 단어</span>
+          <span><i class="swatch" style="background:#ffe27a"></i> 검색어</span>
+          <span><i class="swatch" style="background:var(--reading-line)"></i> 현재 줄</span>
+        </div>
+        <div id="reader" class="reader" aria-label="영어 지문 뷰어"></div>
+        <div class="footer-hint">단어를 한 번 누르면 뜻 팝업이 뜨고, 다시 누르면 단어장에 저장됩니다. 두 손가락으로 핀치줌하면 글자 크기가 변경되고 자동 줄바꿈됩니다.</div>
+      </div>
+
+      <div class="card">
+        <h2>접근성 한눈에 보기</h2>
+        <p class="sub" style="margin:0 0 10px">현재 사용자 시력 프로필을 시뮬레이션합니다.</p>
+        <h3>거리 측정 (시뮬레이션)</h3>
+        <p style="margin:6px 0 0">현재 거리: <b id="distVal">35</b> cm — <span id="distState">양호</span></p>
+        <p class="sub">25cm 이하로 가까워지면 진동 + 음성으로 알려드립니다. (이 프로토타입은 시뮬레이션입니다)</p>
+        <h3>변경 이력 (최근 5건)</h3>
+        <div class="change-log" id="logBox">아직 변경 이력이 없습니다.</div>
+        <div class="save-bar danger-zone">
+          <span class="pill">자동 저장 ON</span>
+          <button id="undoBtn">↶ 마지막 변경 되돌리기</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2) 직독직해 -->
+  <section class="tabpanel" id="tab-literal" role="tabpanel">
+    <div class="card">
+      <h2>직독직해 연습 — 의미 단위(chunk)별 직역 입력</h2>
+      <p class="sub">각 청크 아래 빈칸에 직역을 입력하면 자동으로 채점됩니다. 어순 그대로 옮기는 연습입니다.</p>
+      <div id="literal"></div>
+      <div class="save-bar">
+        <span class="pill" id="literalScore">정답률 —</span>
+        <span class="sub">힌트: 단어 → 어순 → 모범 직역 순으로 단계별 도움이 제공됩니다.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3) 단어장 -->
+  <section class="tabpanel" id="tab-vocab" role="tabpanel">
+    <div class="card">
+      <h2>나만의 단어장</h2>
+      <p class="sub">지문에서 저장한 단어와 사용자가 직접 추가한 단어가 모두 누적됩니다. 출처 지문으로 점프할 수 있습니다.</p>
+      <div class="search">
+        <input id="newWord" placeholder="직접 단어 추가 — 단어" aria-label="새 단어" />
+        <input id="newMean" placeholder="뜻" aria-label="뜻" />
+        <button id="addWord">추가</button>
+      </div>
+      <div id="vocabList" class="vocab-list"></div>
+      <div class="save-bar">
+        <span class="pill" id="vocabCount">0 단어</span>
+        <span class="sub">SRS 복습: 1일 · 3일 · 7일 · 21일 간격으로 자동 노출됩니다.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4) 요약 연습 -->
+  <section class="tabpanel" id="tab-summary" role="tabpanel">
+    <div class="row">
+      <div class="card">
+        <h2>본문 (참고용)</h2>
+        <div class="reader" style="min-height:340px;font-size:22px" id="readerMini"></div>
+      </div>
+      <div class="card">
+        <h2>요약 작성 패널</h2>
+        <div class="summary-grid">
+          <label>주제문 (Topic sentence)<textarea id="s_topic" placeholder="본문의 핵심 한 문장"></textarea></label>
+          <label>제목 (Title)<input id="s_title" placeholder="짧고 함축적인 제목" /></label>
+          <label>요지 (Gist)<textarea id="s_gist" placeholder="2~3문장으로 핵심 주장"></textarea></label>
+          <label>도입 (Intro · 한 문장)<textarea id="s_intro"></textarea></label>
+          <label>본론 (Body · 한 문장)<textarea id="s_body"></textarea></label>
+          <label>결론 (Conclusion · 한 문장)<textarea id="s_concl"></textarea></label>
+          <label>요약문 완성 (3~4문장)<textarea id="s_full" style="min-height:120px"></textarea></label>
+        </div>
+        <div class="save-bar">
+          <span class="pill" id="sumStatus">변경 없음</span>
+          <span class="sub">모든 입력은 1초 후 자동 저장되며 변경 이력에 년월일시분초로 기록됩니다.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="distChip" class="dist"><span class="dot"></span> 거리: <span id="distChipVal">35</span> cm</div>
+
+<script>
+/* ---------- 샘플 영어 지문 ---------- */
+const PASSAGE = [
+  "Reading on a small screen can be exhausting for students with low vision.",
+  "When the letters are too small, learners bring the device closer and closer to their eyes.",
+  "This habit increases eye strain and, over time, can worsen visual fatigue.",
+  "A well-designed reader should let the student enlarge text without losing clarity or layout.",
+  "It should also remind the reader to keep a healthy distance from the screen.",
+  "Most importantly, it should make it easy to find the exact passage the teacher just mentioned in class."
+];
+
+const CHUNKS = [
+  { en: "Reading on a small screen", ko: "작은 화면으로 읽는 것은", hint: "동명사 주어" },
+  { en: "can be exhausting", ko: "지치게 할 수 있다", hint: "조동사 + 형용사" },
+  { en: "for students with low vision.", ko: "저시력 학생들에게.", hint: "전치사구" },
+  { en: "When the letters are too small,", ko: "글자가 너무 작을 때,", hint: "시간 부사절" },
+  { en: "learners bring the device closer and closer", ko: "학습자들은 기기를 점점 더 가까이 가져온다", hint: "비교급 반복" },
+  { en: "to their eyes.", ko: "그들의 눈 쪽으로.", hint: "전치사구" },
+];
+
+/* ---------- 상태 ---------- */
+const state = {
+  reader: { fs: 34, lh: 1.7, theme: 'theme-night', br: 1.0, warm: 0, savedWords: new Set() },
+  log: [],
+  vocab: [
+    { w:"exhausting", m:"매우 피곤하게 만드는", src:"Sentence 1" },
+    { w:"strain", m:"긴장, 부담", src:"Sentence 3" },
+  ],
+  summary: { topic:'', title:'', gist:'', intro:'', body:'', concl:'', full:'' },
+  literal: {}
+};
+
+/* ---------- 유틸 ---------- */
+function pad(n,w=2){return String(n).padStart(w,'0')}
+function nowStamp(){
+  const d=new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(),3)}`;
+}
+function log(action, before, after){
+  state.log.push({ ts: nowStamp(), action, before, after });
+  renderLog();
+}
+function renderLog(){
+  const box = document.getElementById('logBox');
+  if(!state.log.length){ box.textContent='아직 변경 이력이 없습니다.'; return; }
+  const last = state.log.slice(-5).reverse();
+  box.innerHTML = last.map(e=>`<div><span class="ts">[${e.ts}]</span> ${e.action} <span style="color:#a9b6d1">${e.before||''}${e.before&&e.after?' → ':''}${e.after||''}</span></div>`).join('');
+}
+function tick(){
+  const d=new Date();
+  document.getElementById('now').textContent =
+    `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} (KST)`;
+}
+setInterval(tick,1000); tick();
+
+/* ---------- 탭 전환 ---------- */
+document.querySelectorAll('nav.tabs button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected','false'));
+    b.setAttribute('aria-selected','true');
+    document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('show'));
+    document.getElementById('tab-'+b.dataset.tab).classList.add('show');
+    log('탭 전환', '', b.textContent.trim());
+  });
+});
+
+/* ---------- 접근성 컨트롤 ---------- */
+const fs = document.getElementById('fs');
+const lh = document.getElementById('lh');
+const br = document.getElementById('br');
+const wm = document.getElementById('wm');
+const theme = document.getElementById('theme');
+function applyVars(){
+  document.documentElement.style.setProperty('--reading-fs', fs.value+'px');
+  document.documentElement.style.setProperty('--reading-lh', lh.value);
+  document.documentElement.style.setProperty('--brightness', (br.value/100));
+  document.documentElement.style.setProperty('--warm', wm.value+'deg');
+  document.getElementById('fsv').textContent = fs.value;
+  document.getElementById('lhv').textContent = lh.value;
+  document.getElementById('brv').textContent = br.value;
+  document.getElementById('wmv').textContent = wm.value;
+}
+fs.addEventListener('input',()=>{ const before=state.reader.fs+'pt'; state.reader.fs=+fs.value; applyVars(); log('글자 크기 변경', before, fs.value+'pt'); });
+lh.addEventListener('input',()=>{ const before=state.reader.lh; state.reader.lh=+lh.value; applyVars(); log('줄간격 변경', before, lh.value); });
+br.addEventListener('input',()=>{ const before=Math.round(state.reader.br*100)+'%'; state.reader.br=br.value/100; applyVars(); log('밝기 변경', before, br.value+'%'); });
+wm.addEventListener('input',()=>{ const before=state.reader.warm+'°'; state.reader.warm=+wm.value; applyVars(); log('색온도 변경', before, wm.value+'°'); });
+theme.addEventListener('change',()=>{
+  document.body.classList.remove('theme-day','theme-night','theme-amber');
+  document.body.classList.add(theme.value);
+  log('테마 변경', state.reader.theme, theme.value);
+  state.reader.theme = theme.value;
+});
+
+/* ---------- 지문 렌더링 (단어 단위 클릭 지원) ---------- */
+function renderReader(target){
+  const html = PASSAGE.map((s,i)=>{
+    const words = s.split(/(\s+)/).map(w=>{
+      if(/^\s+$/.test(w)) return w;
+      const clean = w.replace(/[^A-Za-z']/g,'');
+      const saved = state.reader.savedWords.has(clean.toLowerCase());
+      return `<span class="word${saved?' saved':''}" data-w="${clean}">${w}</span>`;
+    }).join('');
+    return `<span class="sent" data-i="${i}">${words}</span>`;
+  }).join(' ');
+  target.innerHTML = html;
+  target.querySelectorAll('.word').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      const w = el.dataset.w;
+      if(!w) return;
+      const meaning = prompt(`"${w}"의 뜻을 입력하면 단어장에 저장됩니다.\n(취소하면 저장하지 않음)`,'');
+      if(meaning){
+        state.vocab.push({ w, m: meaning, src: '본문 클릭' });
+        state.reader.savedWords.add(w.toLowerCase());
+        log('단어장 추가', '', `${w} = ${meaning}`);
+        renderReader(target);
+        renderVocab();
+      }
+    });
+  });
+  target.querySelectorAll('.sent').forEach(el=>{
+    el.addEventListener('click',()=>{
+      target.querySelectorAll('.sent').forEach(s=>s.classList.remove('active'));
+      el.classList.add('active');
+      log('현재 줄 선택', '', `문장 ${+el.dataset.i+1}`);
+    });
+  });
+}
+renderReader(document.getElementById('reader'));
+renderReader(document.getElementById('readerMini'));
+
+/* ---------- 검색 ---------- */
+document.getElementById('searchBtn').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+function doSearch(){
+  const q = document.getElementById('searchInput').value.trim();
+  const reader = document.getElementById('reader');
+  if(!q){ renderReader(reader); return; }
+  reader.querySelectorAll('.word').forEach(el=>{
+    if(el.dataset.w && el.dataset.w.toLowerCase().includes(q.toLowerCase())){
+      el.innerHTML = `<mark class="hit">${el.textContent}</mark>`;
+      el.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+  });
+  log('본문 검색', '', q);
+}
+document.getElementById('focusBtn').addEventListener('click',()=>{
+  const reader = document.getElementById('reader');
+  const sents = reader.querySelectorAll('.sent');
+  sents.forEach(s=>s.style.opacity='0.25');
+  if(sents[0]){ sents[0].style.opacity='1'; sents[0].classList.add('active'); }
+  log('한 줄 집중 모드','','ON');
+});
+
+/* ---------- 직독직해 ---------- */
+function renderLiteral(){
+  const wrap = document.getElementById('literal');
+  wrap.innerHTML = CHUNKS.map((c,i)=>`
+    <div class="chunk" data-i="${i}">
+      <div><span class="badge">${i+1}</span><span class="en">${c.en}</span></div>
+      <div class="ko-hint">힌트: ${c.hint}</div>
+      <textarea data-i="${i}" placeholder="직역을 한국어로 입력 (어순 그대로)"></textarea>
+      <div class="result" data-i="${i}"></div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('textarea').forEach(t=>{
+    t.addEventListener('input',()=>{
+      const i = +t.dataset.i;
+      const ans = (CHUNKS[i].ko||'').replace(/\s/g,'');
+      const cur = (t.value||'').replace(/\s/g,'');
+      const result = wrap.querySelector(`.result[data-i="${i}"]`);
+      if(!cur){ result.textContent=''; result.classList.remove('bad'); return; }
+      const ratio = similar(cur, ans);
+      if(ratio>=0.7){
+        result.textContent='✅ 정답 (또는 매우 근접)';
+        result.classList.remove('bad');
+      }else{
+        result.textContent=`▲ 더 가까이: 모범 답안 "${CHUNKS[i].ko}"`;
+        result.classList.add('bad');
+      }
+      state.literal[i] = cur;
+      const ok = Object.keys(state.literal).filter(k=>similar(state.literal[k], (CHUNKS[k].ko||'').replace(/\s/g,''))>=0.7).length;
+      document.getElementById('literalScore').textContent = `정답률 ${ok}/${CHUNKS.length}`;
+      log('직독직해 입력', '', `청크${i+1} (${ratio>=0.7?'정답':'재시도'})`);
+    });
+  });
+}
+function similar(a,b){
+  if(!a||!b) return 0;
+  const set = new Set(a.split(''));
+  let hit=0; for(const ch of b){ if(set.has(ch)) hit++; }
+  return hit/Math.max(a.length,b.length);
+}
+renderLiteral();
+
+/* ---------- 단어장 ---------- */
+function renderVocab(){
+  const list = document.getElementById('vocabList');
+  list.innerHTML = state.vocab.map(v=>`
+    <div class="vocab-card">
+      <div class="w">${v.w}</div>
+      <div class="m">${v.m||'(뜻 미입력)'}</div>
+      <div class="src">출처: ${v.src||'직접 추가'}</div>
+    </div>
+  `).join('') || '<div class="sub">아직 저장된 단어가 없습니다. 본문에서 단어를 눌러보세요.</div>';
+  document.getElementById('vocabCount').textContent = state.vocab.length+' 단어';
+}
+document.getElementById('addWord').addEventListener('click',()=>{
+  const w = document.getElementById('newWord').value.trim();
+  const m = document.getElementById('newMean').value.trim();
+  if(!w) return;
+  state.vocab.push({ w, m, src:'직접 추가' });
+  log('단어장 직접 추가', '', `${w} = ${m}`);
+  document.getElementById('newWord').value='';
+  document.getElementById('newMean').value='';
+  renderVocab();
+});
+renderVocab();
+
+/* ---------- 요약 연습 자동 저장 ---------- */
+let sumTimer=null;
+['s_topic','s_title','s_gist','s_intro','s_body','s_concl','s_full'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener('input',()=>{
+    document.getElementById('sumStatus').textContent='입력 중…';
+    clearTimeout(sumTimer);
+    sumTimer = setTimeout(()=>{
+      const key = id.slice(2);
+      const before = state.summary[key] || '';
+      const after = el.value;
+      if(before!==after){
+        log('요약 자동 저장', `${id} (${before.length}자)`, `${id} (${after.length}자)`);
+        state.summary[key]=after;
+        document.getElementById('sumStatus').textContent='저장됨 · '+nowStamp();
+      }
+    },1000);
+  });
+});
+
+/* ---------- 거리 시뮬레이션 ---------- */
+let distVal=35, distTimer=null;
+function setDist(v){
+  distVal=v;
+  document.getElementById('distVal').textContent=v;
+  document.getElementById('distChipVal').textContent=v;
+  const chip = document.getElementById('distChip');
+  if(v<25){ chip.classList.add('warn'); document.getElementById('distState').textContent='너무 가까움 ⚠'; }
+  else { chip.classList.remove('warn'); document.getElementById('distState').textContent='양호'; }
+}
+document.getElementById('distBtn').addEventListener('click',()=>{
+  if(distTimer){ clearInterval(distTimer); distTimer=null; document.getElementById('distBtn').textContent='시뮬레이션 ▶'; return; }
+  document.getElementById('distBtn').textContent='시뮬레이션 ■';
+  let dir=-1;
+  distTimer=setInterval(()=>{
+    let v = distVal + dir*2;
+    if(v<=18) dir=1; if(v>=40) dir=-1;
+    setDist(v);
+  },700);
+  log('거리 시뮬레이션','','시작');
+});
+
+/* ---------- 되돌리기 ---------- */
+document.getElementById('undoBtn').addEventListener('click',()=>{
+  const last = state.log.pop();
+  if(!last){ alert('되돌릴 변경이 없습니다.'); return; }
+  alert(`되돌림: [${last.ts}] ${last.action}\n${last.before||''} ← ${last.after||''}\n\n* 실제 앱에서는 이 단계에서 데이터까지 함께 복원됩니다.`);
+  renderLog();
+});
+
+applyVars();
+setDist(35);
+</script>
+</body>
+</html>

@@ -22,3 +22,32 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment Variables & Configs (Crucial Security)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.example.local
+
+# Database & SQLite files
+*.sqlite
+*.db
+
+# Certs and Keys
+*.key
+*.pem
+
+# Antigravity Agent & Claude internal directories
+.claude/
+.agent/
+
+# Local Temporary Log files
+*.log
+build_err.txt
+build_log.txt
+build_log_utf8.txt
+build_out.txt
+build-home-ui.log
+build.log
