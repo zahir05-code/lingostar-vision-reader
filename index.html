@@ -1,16 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/lingostar-vision-reader/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&amp;display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <link rel="manifest" href="/lingostar-vision-reader/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <meta name="theme-color" content="#005dac" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LingoStar" />
+    <link rel="apple-touch-icon" href="/lingostar-vision-reader/icon.svg" />
+    <meta name="description" content="저시력 학생을 위한 AI 영어 독해 학습 앱 - 직독직해, 의역, 구문분석, 단어장" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <title>LingoStar Vision Reader</title>
-    <script type="module" crossorigin src="/lingostar-vision-reader/assets/index-DeN7CH_6.js"></script>
+    <script type="module" crossorigin src="/lingostar-vision-reader/assets/index-CKgYpfLl.js"></script>
     <link rel="stylesheet" crossorigin href="/lingostar-vision-reader/assets/index-IG-xCgZz.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // PWA Service Worker 등록
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/lingostar-vision-reader/sw.js')
+            .then(reg => console.log('LingoStar SW registered:', reg.scope))
+            .catch(err => console.warn('LingoStar SW registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

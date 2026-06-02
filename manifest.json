@@ -1,0 +1,25 @@
+{
+  "name": "LingoStar Vision Reader",
+  "short_name": "LingoStar",
+  "description": "저시력 학생을 위한 AI 영어 독해 학습 앱 - 직독직해, 의역, 구문분석, 단어장",
+  "start_url": "/lingostar-vision-reader/",
+  "scope": "/lingostar-vision-reader/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fffdec",
+  "theme_color": "#005dac",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
